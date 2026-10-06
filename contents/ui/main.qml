@@ -59,12 +59,8 @@ PlasmoidItem {
         statusText: root.currentStatus
         bar1Label: root.currentBar1Label
         bar1Percent: root.currentBar1Val
-        bar1Exact: root.currentBar1Exact
-        bar1Reset: root.currentBar1Reset
         bar2Label: root.currentBar2Label
         bar2Percent: root.currentBar2Val
-        bar2Exact: root.currentBar2Exact
-        bar2Reset: root.currentBar2Reset
         colorScheme: root.currentColorScheme
         themeName: root.currentTheme
         pixelScale: root.currentPixelScale

@@ -8,15 +8,11 @@ ColumnLayout {
 
     property string label: "5 часов"
     property int percent: 99
-    property real exactPercent: percent
-    property string resetTime: ""
     property bool isSecondBar: false
     property int totalSegments: 22
     property string colorScheme: "green"
     property int fontSize: 11
     property int barHeight: 12
-
-    property bool showDetails: false
 
     spacing: Math.max(2, Math.round(root.fontSize * 0.25))
 
@@ -26,7 +22,7 @@ ColumnLayout {
     // Number of active filled blocks
     readonly property int activeCount: Math.max(0, Math.min(root.totalSegments, Math.round((root.percent / 100.0) * root.totalSegments)))
 
-    // Label Row: "5 часов" on left, "осталось 72%" or "71.9% (3ч 9м)" on right
+    // Label Row: "5 часов" on left, "осталось XX%" on right
     RowLayout {
         Layout.fillWidth: true
         spacing: 0
@@ -46,28 +42,13 @@ ColumnLayout {
         }
 
         Text {
-            id: valueText
-            text: {
-                if (root.showDetails && root.resetTime) {
-                    return "осталось " + root.exactPercent + "% (" + root.resetTime + ")";
-                }
-                return "осталось " + root.percent + "%";
-            }
+            text: "осталось " + root.percent + "%"
             font.family: PixelTheme.pixelFontFamily
             font.pixelSize: root.fontSize
             font.bold: !PixelTheme.isPixelFont
             color: root.activeColor
             renderType: Text.NativeRendering
             antialiasing: !PixelTheme.isPixelFont
-
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                hoverEnabled: true
-                onEntered: root.showDetails = true
-                onExited: root.showDetails = false
-                onClicked: root.showDetails = !root.showDetails
-            }
         }
     }
 
@@ -79,15 +60,6 @@ ColumnLayout {
         border.color: PixelTheme.slotBorder
         border.width: 1
         radius: PixelTheme.slotRadius
-
-        MouseArea {
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onEntered: root.showDetails = true
-            onExited: root.showDetails = false
-            onClicked: root.showDetails = !root.showDetails
-        }
 
         // Material 3 Continuous Pill Mode vs Retro Segmented Mode
         Loader {

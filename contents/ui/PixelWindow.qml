@@ -11,12 +11,8 @@ Rectangle {
     property string statusText: "отдыхает"
     property string bar1Label: "5 часов"
     property int bar1Percent: 72
-    property real bar1Exact: bar1Percent
-    property string bar1Reset: ""
     property string bar2Label: "неделя"
     property int bar2Percent: 95
-    property real bar2Exact: bar2Percent
-    property string bar2Reset: ""
     property string colorScheme: "green"
     property string themeName: "retro_pixel"
     property int pixelScale: 2
@@ -243,8 +239,6 @@ Rectangle {
                         isSecondBar: false
                         label: root.bar1Label
                         percent: root.bar1Percent
-                        exactPercent: root.bar1Exact
-                        resetTime: root.bar1Reset
                         colorScheme: root.colorScheme
                         fontSize: root.barFontSize
                         barHeight: root.barHeight
@@ -255,8 +249,6 @@ Rectangle {
                         isSecondBar: true
                         label: root.bar2Label
                         percent: root.bar2Percent
-                        exactPercent: root.bar2Exact
-                        resetTime: root.bar2Reset
                         colorScheme: root.colorScheme
                         fontSize: root.barFontSize
                         barHeight: root.barHeight

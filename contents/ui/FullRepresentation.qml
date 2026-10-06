@@ -16,10 +16,6 @@ Item {
     required property string colorScheme
     required property int pixelScale
 
-    property real bar1Exact: bar1Percent
-    property real bar2Exact: bar2Percent
-    property string bar1Reset: ""
-    property string bar2Reset: ""
     property string themeName: "retro_pixel"
 
     implicitWidth: 220
@@ -35,12 +31,8 @@ Item {
         statusText: root.statusText
         bar1Label: root.bar1Label
         bar1Percent: root.bar1Percent
-        bar1Exact: root.bar1Exact
-        bar1Reset: root.bar1Reset
         bar2Label: root.bar2Label
         bar2Percent: root.bar2Percent
-        bar2Exact: root.bar2Exact
-        bar2Reset: root.bar2Reset
         colorScheme: root.colorScheme
         themeName: root.themeName
         pixelScale: root.pixelScale
