@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+    <kcfgfile name=""/>
+    <group name="General">
+        <entry name="titleText" type="String">
+            <default>antigravity.exe</default>
+        </entry>
+        <entry name="statusText" type="String">
+            <default>отдыхает</default>
+        </entry>
+        <entry name="bar1Label" type="String">
+            <default>5 часов</default>
+        </entry>
+        <entry name="bar1Percent" type="Int">
+            <default>99</default>
+        </entry>
+        <entry name="bar2Label" type="String">
+            <default>неделя</default>
+        </entry>
+        <entry name="bar2Percent" type="Int">
+            <default>88</default>
+        </entry>
+        <entry name="enableCliMonitoring" type="Bool">
+            <default>true</default>
+        </entry>
+        <entry name="customScriptPath" type="String">
+            <default></default>
+        </entry>
+        <entry name="pollInterval" type="Int">
+            <default>1</default>
+        </entry>
+        <entry name="pixelScale" type="Int">
+            <default>2</default>
+        </entry>
+        <entry name="colorScheme" type="String">
+            <default>green</default>
+        </entry>
+        <entry name="theme" type="String">
+            <default>retro_pixel</default>
+        </entry>
+    </group>
+</kcfg>

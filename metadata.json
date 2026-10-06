@@ -1,0 +1,22 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "skippingclass",
+                "Email": "https://github.com/skippingclass"
+            }
+        ],
+        "Category": "Utilities",
+        "Description": "Retro pixel-art and Material 3 status & quota monitor for Google Antigravity",
+        "Icon": "utilities-system-monitor",
+        "Id": "org.kde.plasma.antigravity",
+        "License": "MIT",
+        "Name": "Antigravity Status",
+        "Version": "1.1.0",
+        "Website": "https://github.com/skippingclass/plasma-antigravity"
+    },
+    "X-Plasma-API": "declarativeapplet",
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-MainScript": "ui/main.qml"
+}
