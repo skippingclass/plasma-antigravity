@@ -57,8 +57,7 @@ QtObject {
                 activeColor: "#d0bcff",
                 dimColor: "#332c3f",
                 activeColor2: "#a6eeff",
-                dimColor2: "#22353a",
-                fontFamily: "Noto Sans, Roboto, Inter, sans-serif",
+                fontFamily: "Google Sans Flex, Google Sans, Roboto Flex, Roboto, Noto Sans, system-ui, sans-serif",
                 isPixelFont: false,
                 isRounded: true
             };
@@ -155,7 +154,7 @@ QtObject {
                 dimColor: "#2b243b",
                 activeColor2: "#a6e3a1",
                 dimColor2: "#1e2e24",
-                fontFamily: "Noto Sans, Roboto, Inter, sans-serif",
+                fontFamily: "Google Sans Flex, Google Sans, Inter, Roboto, Noto Sans, sans-serif",
                 isPixelFont: false,
                 isRounded: true
             };
@@ -179,7 +178,7 @@ QtObject {
                 dimColor: "#1d2538",
                 activeColor2: "#bb9af7",
                 dimColor2: "#2a223a",
-                fontFamily: "Noto Sans, Roboto, Inter, sans-serif",
+                fontFamily: "Google Sans Flex, Google Sans, Inter, Roboto, Noto Sans, sans-serif",
                 isPixelFont: false,
                 isRounded: true
             };
