@@ -120,54 +120,18 @@ Rectangle {
                 }
 
                 Text {
-                    text: root.titleText
+                    text: (root.titleText === "antigravity.exe" && PixelTheme.isRounded) ? "Antigravity" : root.titleText
                     font.family: PixelTheme.pixelFontFamily
                     font.pixelSize: root.titleFontSize
-                    font.bold: PixelTheme.isRounded
+                    font.weight: PixelTheme.isRounded ? Font.DemiBold : Font.Normal
+                    font.letterSpacing: PixelTheme.isRounded ? 0.2 : 0
                     color: PixelTheme.textTitle
-                    renderType: Text.NativeRendering
+                    renderType: PixelTheme.isPixelFont ? Text.NativeRendering : Text.QtRendering
                     antialiasing: !PixelTheme.isPixelFont
                 }
 
                 Item {
                     Layout.fillWidth: true
-                }
-
-                // Interactive Theme Switcher Button
-                Rectangle {
-                    implicitWidth: Math.max(18, Math.round(20 * root.spacingScale))
-                    implicitHeight: Math.max(16, Math.round(18 * root.spacingScale))
-                    color: themeBtnArea.containsMouse ? Qt.rgba(1, 1, 1, 0.15) : "transparent"
-                    radius: PixelTheme.isRounded ? 4 : 0
-
-                    Text {
-                        anchors.centerIn: parent
-                        text: "◒"
-                        font.pixelSize: Math.max(10, Math.round(12 * root.spacingScale))
-                        color: themeBtnArea.containsMouse ? PixelTheme.activeColor : PixelTheme.textMuted
-                    }
-
-                    MouseArea {
-                        id: themeBtnArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            const next = PixelTheme.getNextTheme(PixelTheme.activeThemeId);
-                            PixelTheme.activeThemeId = next;
-                            if (typeof Plasmoid !== "undefined" && Plasmoid.configuration) {
-                                Plasmoid.configuration.theme = next;
-                            }
-                        }
-                    }
-                }
-
-                // Minimize dash
-                Rectangle {
-                    implicitWidth: Math.max(7, Math.round(8 * root.spacingScale))
-                    implicitHeight: Math.max(2, Math.round(2 * root.spacingScale))
-                    color: PixelTheme.textMuted
-                    radius: PixelTheme.isRounded ? 1 : 0
                 }
             }
         }
@@ -214,9 +178,10 @@ Rectangle {
                         text: root.statusText
                         font.family: PixelTheme.pixelFontFamily
                         font.pixelSize: root.statusFontSize
-                        font.bold: PixelTheme.isRounded
+                        font.weight: PixelTheme.isRounded ? Font.DemiBold : Font.Normal
+                        font.letterSpacing: PixelTheme.isRounded ? 0.3 : 0
                         color: PixelTheme.textPrimary
-                        renderType: Text.NativeRendering
+                        renderType: PixelTheme.isPixelFont ? Text.NativeRendering : Text.QtRendering
                         antialiasing: !PixelTheme.isPixelFont
                     }
                 }

@@ -26,6 +26,16 @@ QtObject {
         return "retro_pixel";
     }
 
+    function getBestFont(preferredList, fallback) {
+        const available = Qt.fontFamilies();
+        for (let i = 0; i < preferredList.length; i++) {
+            if (available.indexOf(preferredList[i]) !== -1) {
+                return preferredList[i];
+            }
+        }
+        return fallback;
+    }
+
     function getThemeName(themeId) {
         for (let i = 0; i < themeList.length; i++) {
             if (themeList[i].id === themeId) {
@@ -42,22 +52,24 @@ QtObject {
             return {
                 windowBg: "#1c1924",
                 windowRadius: 18,
-                headerBg: "#292433",
+                headerBg: "#252130",
                 headerRadius: 18,
-                headerBorder: "transparent",
+                headerBorder: "#352f44",
                 frameBorder: "#3a3447",
                 frameBorderWidth: 1,
                 frameHighlight: "transparent",
-                slotBg: "#2f2a3b",
-                slotBorder: "#3f394d",
-                slotRadius: 8,
+                slotBg: "#2d273a",
+                slotBorder: "transparent",
+                slotRadius: 12,
                 textPrimary: "#f5eff7",
-                textMuted: "#a9a1b4",
-                textLabel: "#cec3db",
+                textTitle: "#f5eff7",
+                textMuted: "#9a93a6",
+                textLabel: "#d0c4de",
                 activeColor: "#d0bcff",
                 dimColor: "#332c3f",
-                activeColor2: "#a6eeff",
-                fontFamily: "Google Sans Flex, Google Sans, Roboto Flex, Roboto, Noto Sans, system-ui, sans-serif",
+                activeColor2: "#7cd5ff",
+                dimColor2: "#20343f",
+                fontFamily: getBestFont(["Google Sans Flex", "Google Sans", "Roboto Flex", "Roboto", "Noto Sans"], "sans-serif"),
                 isPixelFont: false,
                 isRounded: true
             };
@@ -154,7 +166,7 @@ QtObject {
                 dimColor: "#2b243b",
                 activeColor2: "#a6e3a1",
                 dimColor2: "#1e2e24",
-                fontFamily: "Google Sans Flex, Google Sans, Inter, Roboto, Noto Sans, sans-serif",
+                fontFamily: getBestFont(["Google Sans Flex", "Google Sans", "Inter", "Roboto", "Noto Sans"], "sans-serif"),
                 isPixelFont: false,
                 isRounded: true
             };
@@ -178,7 +190,7 @@ QtObject {
                 dimColor: "#1d2538",
                 activeColor2: "#bb9af7",
                 dimColor2: "#2a223a",
-                fontFamily: "Google Sans Flex, Google Sans, Inter, Roboto, Noto Sans, sans-serif",
+                fontFamily: getBestFont(["Google Sans Flex", "Google Sans", "Inter", "Roboto", "Noto Sans"], "sans-serif"),
                 isPixelFont: false,
                 isRounded: true
             };

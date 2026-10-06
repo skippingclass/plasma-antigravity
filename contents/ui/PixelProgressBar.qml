@@ -31,9 +31,10 @@ ColumnLayout {
             text: root.label
             font.family: PixelTheme.pixelFontFamily
             font.pixelSize: root.fontSize
-            font.bold: !PixelTheme.isPixelFont
+            font.weight: PixelTheme.isRounded ? Font.Medium : Font.Normal
+            font.letterSpacing: PixelTheme.isRounded ? 0.1 : 0
             color: PixelTheme.textLabel
-            renderType: Text.NativeRendering
+            renderType: PixelTheme.isPixelFont ? Text.NativeRendering : Text.QtRendering
             antialiasing: !PixelTheme.isPixelFont
         }
 
@@ -45,9 +46,10 @@ ColumnLayout {
             text: "осталось " + root.percent + "%"
             font.family: PixelTheme.pixelFontFamily
             font.pixelSize: root.fontSize
-            font.bold: !PixelTheme.isPixelFont
+            font.weight: PixelTheme.isRounded ? Font.DemiBold : Font.Normal
+            font.letterSpacing: PixelTheme.isRounded ? 0.2 : 0
             color: root.activeColor
-            renderType: Text.NativeRendering
+            renderType: PixelTheme.isPixelFont ? Text.NativeRendering : Text.QtRendering
             antialiasing: !PixelTheme.isPixelFont
         }
     }
@@ -58,13 +60,13 @@ ColumnLayout {
         implicitHeight: root.barHeight
         color: PixelTheme.slotBg
         border.color: PixelTheme.slotBorder
-        border.width: 1
-        radius: PixelTheme.slotRadius
+        border.width: (PixelTheme.slotBorder !== "transparent" && PixelTheme.slotBorder !== "") ? 1 : 0
+        radius: PixelTheme.isRounded && !PixelTheme.isPixelFont ? height / 2 : PixelTheme.slotRadius
 
         // Material 3 Continuous Pill Mode vs Retro Segmented Mode
         Loader {
             anchors.fill: parent
-            anchors.margins: PixelTheme.isRounded ? 2 : 1
+            anchors.margins: PixelTheme.isRounded && !PixelTheme.isPixelFont ? 2 : 1
             sourceComponent: PixelTheme.isRounded && !PixelTheme.isPixelFont ? continuousBarComp : segmentedBarComp
         }
 
@@ -81,7 +83,7 @@ ColumnLayout {
                     anchors.bottom: parent.bottom
                     width: Math.max(0, Math.min(parent.width, (root.percent / 100.0) * parent.width))
                     color: root.activeColor
-                    radius: Math.max(2, PixelTheme.slotRadius - 1)
+                    radius: height / 2
 
                     Behavior on width {
                         NumberAnimation { duration: 250; easing.type: Easing.OutCubic }

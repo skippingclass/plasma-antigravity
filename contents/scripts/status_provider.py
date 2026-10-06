@@ -21,17 +21,25 @@ def check_custom_script(script_path):
     return None
 
 def get_active_agy_pid():
-    """Find the interactive agy CLI process PID, ignoring background usage queries."""
+    """
+    Find the interactive agy CLI process PID attached to a terminal (TTY/PTS).
+    Background fetchers (pipes) and non-interactive daemons are strictly ignored.
+    """
     try:
         res = subprocess.run(["pgrep", "-x", "agy"], capture_output=True, text=True)
         if res.returncode == 0:
             for pid_str in res.stdout.strip().split():
                 pid = int(pid_str)
                 try:
+                    # Interactive CLI session must have stdin attached to a PTS or TTY
+                    fd0 = os.readlink(f"/proc/{pid}/fd/0")
+                    if not (fd0.startswith("/dev/pts/") or fd0.startswith("/dev/tty")):
+                        continue
+
                     with open(f"/proc/{pid}/cmdline", "rb") as f:
                         cmdline = f.read().decode("utf-8", errors="ignore")
-                    # Ignore background usage fetchers and one-shot commands
-                    if "/usage" in cmdline or "--refresh-only" in cmdline:
+                    # Ignore background usage fetchers or one-shots
+                    if "/usage" in cmdline or "--refresh-only" in cmdline or "-p" in cmdline:
                         continue
                     return pid
                 except Exception:
@@ -40,13 +48,30 @@ def get_active_agy_pid():
         pass
     return None
 
+import re
+from datetime import datetime
+
+GLOG_RE = re.compile(r'^[IWEF](\d{2})(\d{2})\s+(\d{2}):(\d{2}):(\d{2})\.(\d{6})')
+
+def parse_glog_timestamp(line):
+    m = GLOG_RE.match(line)
+    if not m:
+        return None
+    month, day, hour, minute, second, micro = map(int, m.groups())
+    now = datetime.now()
+    try:
+        dt = datetime(now.year, month, day, hour, minute, second, micro)
+        return dt.timestamp()
+    except Exception:
+        return None
+
 def check_agy_status(active_pid):
     """
     Determine agent state:
-    - спит: no interactive agy process is running
-    - думает: streamGenerateContent active in current session log (< 5s)
-    - работает: tool/bash active in current session log (< 5s)
-    - отдыхает: session is idle, waiting for user input
+    - спит: no interactive agy process running in any terminal
+    - думает: streamGenerateContent active within last 4s
+    - работает: tool/bash running (< 4s or child process active)
+    - отдыхает: interactive session is idle, waiting for user input
     """
     if not active_pid:
         return "спит"
@@ -54,7 +79,15 @@ def check_agy_status(active_pid):
     now = time.time()
     active_log = None
 
-    # Get the exact log file being written by this active agy process
+    # 1. Check if the active agy process is currently running child commands (tools/bash)
+    try:
+        res = subprocess.run(["pgrep", "-P", str(active_pid)], capture_output=True, text=True)
+        if res.returncode == 0 and res.stdout.strip():
+            return "работает"
+    except Exception:
+        pass
+
+    # 2. Get the exact log file being written by this active agy process
     try:
         fd1 = os.readlink(f"/proc/{active_pid}/fd/1")
         if os.path.exists(fd1) and fd1.endswith(".log"):
@@ -62,7 +95,6 @@ def check_agy_status(active_pid):
     except Exception:
         pass
 
-    # Fallback to the latest log file if fd1 wasn't a log
     if not active_log:
         logs = sorted(glob.glob(os.path.expanduser("~/.gemini/antigravity-cli/log/cli-*.log")), key=os.path.getmtime)
         if logs:
@@ -70,15 +102,17 @@ def check_agy_status(active_pid):
 
     if active_log and os.path.exists(active_log):
         try:
-            mtime = os.path.getmtime(active_log)
-            # If written to within the last 5 seconds, it is actively processing
-            if (now - mtime) < 5.0:
-                with open(active_log, "rb") as f:
-                    f.seek(max(0, os.path.getsize(active_log) - 4096))
-                    tail = f.read().decode("utf-8", errors="ignore")
-                if "streamGenerateContent" in tail or "Thinking" in tail or "reasoning" in tail:
-                    return "думает"
-                return "работает"
+            with open(active_log, "r", errors="ignore") as f:
+                lines = f.readlines()[-40:]
+            
+            # Check recent log events in reverse order
+            for line in reversed(lines):
+                ts = parse_glog_timestamp(line)
+                if ts and (now - ts) <= 4.0:
+                    if "streamGenerateContent" in line or "Thinking" in line or "reasoning" in line:
+                        return "думает"
+                    if "go_command.go" in line or "ExecuteTool" in line:
+                        return "работает"
         except Exception:
             pass
 
@@ -136,20 +170,16 @@ def get_agy_usage(is_active):
 
     now = time.time()
 
-    # Only fetch if active or no cache at all
-    if not cached or "timestamp" not in cached:
-        live = fetch_live_quota()
-        if live:
-            return live
-    elif is_active and (now - cached.get("timestamp", 0)) > CACHE_TTL:
-        # Refresh in background only when agy is actually active
-        try:
-            subprocess.Popen(
-                [sys.executable, "-c", "import sys; from status_provider import fetch_live_quota; fetch_live_quota()"],
-                cwd=os.path.dirname(os.path.abspath(__file__))
-            )
-        except Exception:
-            pass
+    # If agy is active and cache is expired or missing, trigger background refresh
+    if is_active:
+        if not cached or (now - cached.get("timestamp", 0)) > CACHE_TTL:
+            try:
+                subprocess.Popen(
+                    [sys.executable, "-c", "import sys; from status_provider import fetch_live_quota; fetch_live_quota()"],
+                    cwd=os.path.dirname(os.path.abspath(__file__))
+                )
+            except Exception:
+                pass
 
     if cached:
         return cached
