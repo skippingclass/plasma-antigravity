@@ -155,9 +155,8 @@ def parse_glog_timestamp(line):
 
 
 def inspect_pid_fds(pid):
-    """Find open conversation SQLite DBs and log file for a specific agy PID."""
+    """Find open conversation SQLite DBs for a specific agy PID."""
     dbs = set()
-    log_file = None
     fd_dir = f"/proc/{pid}/fd"
     try:
         for fd_name in os.listdir(fd_dir):
@@ -165,13 +164,16 @@ def inspect_pid_fds(pid):
                 target = os.readlink(f"{fd_dir}/{fd_name}")
                 if target.endswith(".db") and "/conversations/" in target and os.path.exists(target):
                     dbs.add(target)
-                elif fd_name in ("1", "2") and target.endswith(".log") and os.path.exists(target):
-                    log_file = target
+                elif "/presence/" in target and target.endswith(".lock"):
+                    cid = os.path.basename(target)[:-5]
+                    cand = os.path.expanduser(f"~/.gemini/antigravity-cli/conversations/{cid}.db")
+                    if os.path.exists(cand):
+                        dbs.add(cand)
             except Exception:
                 continue
     except Exception:
         pass
-    return list(dbs), log_file
+    return list(dbs)
 
 
 def check_db_status(db_path, now):
@@ -182,7 +184,7 @@ def check_db_status(db_path, now):
         cur.execute(
             "SELECT idx, step_type, status, metadata, substr(step_payload, 1, 160) "
             "FROM steps WHERE step_type NOT IN (23, 90, 98, 101) "
-            "ORDER BY idx DESC LIMIT 6"
+            "ORDER BY idx DESC LIMIT 8"
         )
         rows = cur.fetchall()
         conn.close()
@@ -192,86 +194,66 @@ def check_db_status(db_path, now):
     if not rows:
         return "отдыхает"
 
-    # Hold 'работает' for 2.8s after any fast built-in tool (view_file, grep_search, etc.) completes
-    for idx, st_type, status, meta, payload in rows:
-        if st_type in TOOL_STEP_TYPES:
-            ts_map = parse_meta_timestamps(meta)
-            latest_ts = max(ts_map.values()) if ts_map else 0
-            if status in ACTIVE_STATUSES and (now - latest_ts) <= 120.0:
-                if payload and b"ask_question" in payload:
-                    return "отдыхает"
-                return "работает"
-            if status == STATUS_DONE and (now - latest_ts) <= 2.8:
-                return "работает"
-
     top_idx, top_type, top_status, top_meta, top_payload = rows[0]
     top_ts_map = parse_meta_timestamps(top_meta)
     top_ts = max(top_ts_map.values()) if top_ts_map else 0
     top_age = (now - top_ts) if top_ts else 999999.0
 
     # 1. Error check
-    if (top_status == STATUS_ERROR or top_type == STEP_ERROR_MESSAGE) and top_age <= 12.0:
+    if (top_status == STATUS_ERROR or top_type == STEP_ERROR_MESSAGE) and 0 <= top_age <= 12.0:
         return "ошибка"
 
-    # 2. Planner response actively streaming / thinking
-    if top_type == STEP_PLANNER_RESPONSE:
-        if top_status in ACTIVE_STATUSES and top_age <= 180.0:
+    # 2. If the turn finished with a completed planner response -> resting / idle
+    if top_type == STEP_PLANNER_RESPONSE and top_status == STATUS_DONE:
+        return "отдыхает"
+
+    # 3. Planner response actively streaming / thinking
+    if top_type == STEP_PLANNER_RESPONSE and top_status in ACTIVE_STATUSES:
+        if 0 <= top_age <= 180.0:
             return "думает"
         return "отдыхает"
 
-    # 3. User just sent input, or a tool just finished and LLM is thinking on the next step
-    if top_type == STEP_USER_INPUT and top_age <= 120.0:
-        return "думает"
+    # 4. User input just submitted -> thinking
+    if top_type == STEP_USER_INPUT:
+        if 0 <= top_age <= 60.0:
+            return "думает"
+        return "отдыхает"
 
-    if top_type in TOOL_STEP_TYPES and top_status == STATUS_DONE and top_age <= 90.0:
-        return "думает"
+    # 5. Top step is a tool
+    if top_type in TOOL_STEP_TYPES:
+        if top_status in ACTIVE_STATUSES and 0 <= top_age <= 300.0:
+            if top_payload and b"ask_question" in top_payload:
+                return "отдыхает"
+            return "работает"
+        if top_status == STATUS_DONE:
+            if 0 <= top_age <= 2.5:
+                return "работает"
+            if 0 <= top_age <= 30.0:
+                return "думает"
+            return "отдыхает"
+
+    # 6. Check recent rows for any active background or concurrent tools
+    for idx, st_type, status, meta, payload in rows[1:]:
+        if st_type in TOOL_STEP_TYPES and status in ACTIVE_STATUSES:
+            ts_map = parse_meta_timestamps(meta)
+            latest_ts = max(ts_map.values()) if ts_map else 0
+            age = (now - latest_ts) if latest_ts else 999999.0
+            if 0 <= age <= 300.0:
+                if payload and b"ask_question" in payload:
+                    return "отдыхает"
+                return "работает"
 
     return "отдыхает"
 
 
 def check_single_pid_status(pid, now):
-    # 1. Check if agy has active child processes (e.g. bash command via run_command)
-    try:
-        res = subprocess.run(["pgrep", "-P", str(pid)], capture_output=True, text=True)
-        if res.returncode == 0 and res.stdout.strip():
-            return "работает"
-    except Exception:
-        pass
-
-    dbs, active_log = inspect_pid_fds(pid)
+    dbs = inspect_pid_fds(pid)
     best_status = "отдыхает"
 
-    # 2. Check SQLite trajectory databases open by this PID
     for db_path in dbs:
         st = check_db_status(db_path, now)
         if st and STATUS_PRIORITY.get(st, 0) > STATUS_PRIORITY.get(best_status, 0):
             best_status = st
-
-    # 3. Check active glog file for immediate pre-DB events (e.g. first 1s of request)
-    if active_log and os.path.exists(active_log):
-        try:
-            with open(active_log, "r", errors="ignore") as f:
-                lines = f.readlines()[-30:]
-            for line in reversed(lines):
-                ts = parse_glog_timestamp(line)
-                if ts and (now - ts) <= 5.0:
-                    if any(
-                        k in line
-                        for k in (
-                            "streamGenerateContent",
-                            "generateContent",
-                            "SEND_USER_CASCADE_MESSAGE",
-                            "fetchAvailableModels",
-                            "LLM Monitor",
-                        )
-                    ):
-                        if STATUS_PRIORITY["думает"] > STATUS_PRIORITY.get(best_status, 0):
-                            best_status = "думает"
-                    elif "go_command.go" in line or "ExecuteTool" in line or "agy_tool_safety" in line:
-                        if STATUS_PRIORITY["работает"] > STATUS_PRIORITY.get(best_status, 0):
-                            best_status = "работает"
-        except Exception:
-            pass
 
     return best_status
 
