@@ -154,9 +154,32 @@ def parse_glog_timestamp(line):
         return None
 
 
+def get_latest_cancel_ts(log_file, cid=None):
+    """Detect if an in-progress response or conversation was cancelled / interrupted by the user."""
+    if not log_file or not os.path.exists(log_file):
+        return 0
+    try:
+        with open(log_file, "r", errors="ignore") as f:
+            lines = f.readlines()[-60:]
+        for line in reversed(lines):
+            if "Cancelling in-progress response" in line or "Cancelling conversation" in line or "context canceled" in line:
+                if cid and cid in line:
+                    ts = parse_glog_timestamp(line)
+                    if ts:
+                        return ts
+                elif not cid:
+                    ts = parse_glog_timestamp(line)
+                    if ts:
+                        return ts
+    except Exception:
+        pass
+    return 0
+
+
 def inspect_pid_fds(pid):
-    """Find open conversation SQLite DBs for a specific agy PID."""
+    """Find open conversation SQLite DBs and active log file for a specific agy PID."""
     dbs = set()
+    log_file = None
     fd_dir = f"/proc/{pid}/fd"
     try:
         for fd_name in os.listdir(fd_dir):
@@ -169,15 +192,20 @@ def inspect_pid_fds(pid):
                     cand = os.path.expanduser(f"~/.gemini/antigravity-cli/conversations/{cid}.db")
                     if os.path.exists(cand):
                         dbs.add(cand)
+                elif fd_name in ("1", "2") and target.endswith(".log") and os.path.exists(target):
+                    log_file = target
             except Exception:
                 continue
     except Exception:
         pass
-    return list(dbs)
+    return list(dbs), log_file
 
 
-def check_db_status(db_path, now):
+def check_db_status(db_path, now, log_file=None):
     """Determine conversation status directly from Antigravity SQLite trajectory steps."""
+    cid = os.path.basename(db_path)[:-3] if db_path.endswith(".db") else None
+    cancel_ts = get_latest_cancel_ts(log_file, cid) if log_file else 0
+
     try:
         conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=0.2)
         cur = conn.cursor()
@@ -199,46 +227,54 @@ def check_db_status(db_path, now):
     top_ts = max(top_ts_map.values()) if top_ts_map else 0
     top_age = (now - top_ts) if top_ts else 999999.0
 
-    # 1. Error check
+    # 1. User interrupt / cancellation detected in CLI logs
+    if cancel_ts > 0 and (cancel_ts >= top_ts or (now - cancel_ts) <= 2.5):
+        return "отдыхает"
+
+    # 2. Step is explicitly marked as canceled or invalid
+    if top_status in (STATUS_CANCELED, STATUS_INVALID):
+        return "отдыхает"
+
+    # 3. Error check
     if (top_status == STATUS_ERROR or top_type == STEP_ERROR_MESSAGE) and 0 <= top_age <= 12.0:
         return "ошибка"
 
-    # 2. If the turn finished with a completed planner response -> resting / idle
+    # 4. If the turn finished with a completed planner response -> resting / idle
     if top_type == STEP_PLANNER_RESPONSE and top_status == STATUS_DONE:
         return "отдыхает"
 
-    # 3. Planner response actively streaming / thinking
+    # 5. Planner response actively streaming / thinking
     if top_type == STEP_PLANNER_RESPONSE and top_status in ACTIVE_STATUSES:
-        if 0 <= top_age <= 180.0:
+        if 0 <= top_age <= 20.0:
             return "думает"
         return "отдыхает"
 
-    # 4. User input just submitted -> thinking
+    # 6. User input just submitted -> thinking (starts in <50ms)
     if top_type == STEP_USER_INPUT:
-        if 0 <= top_age <= 60.0:
+        if 0 <= top_age <= 3.5:
             return "думает"
         return "отдыхает"
 
-    # 5. Top step is a tool
+    # 7. Top step is a tool
     if top_type in TOOL_STEP_TYPES:
-        if top_status in ACTIVE_STATUSES and 0 <= top_age <= 300.0:
+        if top_status in ACTIVE_STATUSES and 0 <= top_age <= 180.0:
             if top_payload and b"ask_question" in top_payload:
                 return "отдыхает"
             return "работает"
         if top_status == STATUS_DONE:
             if 0 <= top_age <= 2.5:
                 return "работает"
-            if 0 <= top_age <= 30.0:
+            if 0 <= top_age <= 6.0:
                 return "думает"
             return "отдыхает"
 
-    # 6. Check recent rows for any active background or concurrent tools
+    # 8. Check recent rows for any active concurrent tool
     for idx, st_type, status, meta, payload in rows[1:]:
         if st_type in TOOL_STEP_TYPES and status in ACTIVE_STATUSES:
             ts_map = parse_meta_timestamps(meta)
             latest_ts = max(ts_map.values()) if ts_map else 0
             age = (now - latest_ts) if latest_ts else 999999.0
-            if 0 <= age <= 300.0:
+            if 0 <= age <= 180.0:
                 if payload and b"ask_question" in payload:
                     return "отдыхает"
                 return "работает"
@@ -247,11 +283,11 @@ def check_db_status(db_path, now):
 
 
 def check_single_pid_status(pid, now):
-    dbs = inspect_pid_fds(pid)
+    dbs, log_file = inspect_pid_fds(pid)
     best_status = "отдыхает"
 
     for db_path in dbs:
-        st = check_db_status(db_path, now)
+        st = check_db_status(db_path, now, log_file)
         if st and STATUS_PRIORITY.get(st, 0) > STATUS_PRIORITY.get(best_status, 0):
             best_status = st
 
