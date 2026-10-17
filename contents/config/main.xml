@@ -6,7 +6,7 @@
     <kcfgfile name=""/>
     <group name="General">
         <entry name="titleText" type="String">
-            <default>antigravity.exe</default>
+            <default>antigravity.sh</default>
         </entry>
         <entry name="statusText" type="String">
             <default>отдыхает</default>
@@ -51,6 +51,9 @@
             <default>false</default>
         </entry>
         <entry name="barStyle" type="String">
+            <default>auto</default>
+        </entry>
+        <entry name="mascotSize" type="String">
             <default>auto</default>
         </entry>
     </group>

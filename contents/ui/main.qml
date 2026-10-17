@@ -21,7 +21,7 @@ PlasmoidItem {
         id: monitor
     }
 
-    readonly property string currentTitle: Plasmoid.configuration.titleText
+    readonly property string currentTitle: (Plasmoid.configuration.titleText && Plasmoid.configuration.titleText !== "antigravity.exe") ? Plasmoid.configuration.titleText : "antigravity.sh"
     readonly property string currentStatus: monitor.currentStatus
     readonly property string currentBar1Label: monitor.bar1Label
     readonly property int currentBar1Val: monitor.bar1Val
@@ -77,5 +77,6 @@ PlasmoidItem {
         showExactPercent: Plasmoid.configuration.showExactPercent !== undefined ? Plasmoid.configuration.showExactPercent : false
         showResetTimes: Plasmoid.configuration.showResetTimes !== undefined ? Plasmoid.configuration.showResetTimes : false
         barStyle: Plasmoid.configuration.barStyle ? Plasmoid.configuration.barStyle : "auto"
+        mascotSize: Plasmoid.configuration.mascotSize ? Plasmoid.configuration.mascotSize : "auto"
     }
 }

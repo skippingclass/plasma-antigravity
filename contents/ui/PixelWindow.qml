@@ -7,7 +7,7 @@ import org.kde.plasma.plasmoid
 Rectangle {
     id: root
 
-    property string titleText: "antigravity.exe"
+    property string titleText: "antigravity.sh"
     property string statusText: "отдыхает"
     property string bar1Label: "5 часов"
     property int bar1Percent: 72
@@ -24,6 +24,7 @@ Rectangle {
     property bool showExactPercent: false
     property bool showResetTimes: false
     property string barStyle: "auto"
+    property string mascotSize: "auto"
 
     implicitWidth: 220
     implicitHeight: 215
@@ -67,8 +68,13 @@ Rectangle {
     readonly property int availableBodyHeight: Math.max(50, root.height - titleBarHeight)
     readonly property real spacingScale: Math.max(0.8, Math.min(2.5, root.height / 220.0))
 
-    // Dynamic mascot scale: fills ~32% of available body height and fits within window width with generous breathing room
-    readonly property int dynamicMascotScale: Math.max(3, Math.min(12, Math.floor(Math.min((root.width - 44) / 14, (availableBodyHeight * 0.32) / 10))))
+    // Dynamic mascot scale: bold, juicy mascot (scale 7 at 220x215) with customizable options
+    readonly property int dynamicMascotScale: {
+        if (root.mascotSize === "small") return Math.max(3, Math.min(6, Math.floor((availableBodyHeight * 0.28) / 10)));
+        if (root.mascotSize === "medium") return Math.max(3, Math.min(8, Math.floor((availableBodyHeight * 0.33) / 10)));
+        if (root.mascotSize === "large") return Math.max(4, Math.min(14, Math.floor((availableBodyHeight * 0.42) / 10)));
+        return Math.max(4, Math.min(13, Math.floor(Math.min((root.width - 36) / 13, (availableBodyHeight * 0.38) / 10))));
+    }
 
     // Dynamic font and bar sizes
     readonly property int titleFontSize: Math.max(10, Math.min(16, Math.round(Math.max(22, root.height * 0.11) * 0.50)))
@@ -130,7 +136,7 @@ Rectangle {
                 }
 
                 Text {
-                    text: (root.titleText === "antigravity.exe" && PixelTheme.isRounded) ? "Antigravity" : root.titleText
+                    text: ((root.titleText === "antigravity.sh" || root.titleText === "antigravity.exe") && PixelTheme.isRounded) ? "Antigravity" : root.titleText
                     font.family: PixelTheme.pixelFontFamily
                     font.pixelSize: root.titleFontSize
                     font.weight: PixelTheme.isRounded ? Font.DemiBold : Font.Normal

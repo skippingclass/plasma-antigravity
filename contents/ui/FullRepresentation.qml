@@ -21,6 +21,7 @@ Item {
     property bool showExactPercent: false
     property bool showResetTimes: false
     property string barStyle: "auto"
+    property string mascotSize: "auto"
     property real bar1Exact: 0.0
     property real bar2Exact: 0.0
     property string bar1Reset: ""
@@ -52,5 +53,6 @@ Item {
         showExactPercent: root.showExactPercent
         showResetTimes: root.showResetTimes
         barStyle: root.barStyle
+        mascotSize: root.mascotSize
     }
 }

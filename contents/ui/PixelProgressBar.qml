@@ -33,7 +33,7 @@ ColumnLayout {
         spacing: 0
 
         Text {
-            text: (root.showReset && root.resetTime) ? (root.label + " (" + root.resetTime + ")") : root.label
+            text: root.label
             font.family: PixelTheme.pixelFontFamily
             font.pixelSize: root.fontSize
             font.weight: PixelTheme.isRounded ? Font.Medium : Font.Normal
@@ -45,10 +45,17 @@ ColumnLayout {
 
         Item {
             Layout.fillWidth: true
+            Layout.minimumWidth: 8
         }
 
         Text {
-            text: "осталось " + (root.showExact ? (root.exactPercent ? root.exactPercent.toFixed(1) : root.percent.toFixed(1)) : root.percent) + "%"
+            text: {
+                const val = (root.showExact ? (root.exactPercent ? root.exactPercent.toFixed(1) : root.percent.toFixed(1)) : root.percent) + "%";
+                if (root.showReset && root.resetTime) {
+                    return val + " (" + root.resetTime + ")";
+                }
+                return "осталось " + val;
+            }
             font.family: PixelTheme.pixelFontFamily
             font.pixelSize: root.fontSize
             font.weight: PixelTheme.isRounded ? Font.DemiBold : Font.Normal

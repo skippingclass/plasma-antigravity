@@ -18,6 +18,7 @@ KCM.SimpleKCM {
     property alias cfg_showExactPercent: showExactPercentCheck.checked
     property alias cfg_showResetTimes: showResetTimesCheck.checked
     property string cfg_barStyle: barStyleCombo.currentValue
+    property string cfg_mascotSize: mascotSizeCombo.currentValue
 
     Kirigami.FormLayout {
 
@@ -101,7 +102,7 @@ KCM.SimpleKCM {
         QQC2.TextField {
             id: titleField
             Kirigami.FormData.label: i18n("Window Title:")
-            placeholderText: "antigravity.exe"
+            placeholderText: "antigravity.sh"
             enabled: showTitleBarCheck.checked
             Layout.fillWidth: true
         }
@@ -109,6 +110,26 @@ KCM.SimpleKCM {
         Kirigami.Separator {
             Kirigami.FormData.isSection: true
             Kirigami.FormData.label: i18n("Mascot & Details")
+        }
+
+        QQC2.ComboBox {
+            id: mascotSizeCombo
+            Kirigami.FormData.label: i18n("Mascot Size:")
+            textRole: "text"
+            valueRole: "value"
+            model: [
+                { text: i18n("Auto (Bold / Prominent)"), value: "auto" },
+                { text: i18n("Large (Max Hero)"), value: "large" },
+                { text: i18n("Medium (Balanced)"), value: "medium" },
+                { text: i18n("Small (Compact)"), value: "small" }
+            ]
+            currentIndex: {
+                for (let i = 0; i < count; i++) {
+                    if (model[i].value === root.cfg_mascotSize) return i;
+                }
+                return 0;
+            }
+            onActivated: root.cfg_mascotSize = currentValue
         }
 
         QQC2.CheckBox {
@@ -126,7 +147,7 @@ KCM.SimpleKCM {
         QQC2.CheckBox {
             id: showResetTimesCheck
             Kirigami.FormData.label: i18n("Reset Times:")
-            text: i18n("Show quota reset timer next to labels (e.g. 5 часов (11м))")
+            text: i18n("Show quota reset timer next to percentages (e.g. 47.2% (11м))")
         }
     }
 }
