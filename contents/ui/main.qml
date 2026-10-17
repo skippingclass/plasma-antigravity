@@ -64,9 +64,18 @@ PlasmoidItem {
         statusText: root.currentStatus
         bar1Label: root.currentBar1Label
         bar1Percent: root.currentBar1Val
+        bar1Exact: root.currentBar1Exact
+        bar1Reset: root.currentBar1Reset
         bar2Label: root.currentBar2Label
         bar2Percent: root.currentBar2Val
+        bar2Exact: root.currentBar2Exact
+        bar2Reset: root.currentBar2Reset
         colorScheme: root.currentColorScheme
         themeName: root.currentTheme
+        showTitleBar: Plasmoid.configuration.showTitleBar !== undefined ? Plasmoid.configuration.showTitleBar : true
+        enableAnimation: Plasmoid.configuration.enableAnimation !== undefined ? Plasmoid.configuration.enableAnimation : true
+        showExactPercent: Plasmoid.configuration.showExactPercent !== undefined ? Plasmoid.configuration.showExactPercent : false
+        showResetTimes: Plasmoid.configuration.showResetTimes !== undefined ? Plasmoid.configuration.showResetTimes : false
+        barStyle: Plasmoid.configuration.barStyle ? Plasmoid.configuration.barStyle : "auto"
     }
 }

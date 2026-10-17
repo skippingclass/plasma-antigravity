@@ -8,6 +8,11 @@ ColumnLayout {
 
     property string label: "5 часов"
     property int percent: 99
+    property real exactPercent: 99.0
+    property string resetTime: ""
+    property bool showExact: false
+    property bool showReset: false
+    property string barStyle: "auto"
     property bool isSecondBar: false
     property int totalSegments: 22
     property string colorScheme: "green"
@@ -28,7 +33,7 @@ ColumnLayout {
         spacing: 0
 
         Text {
-            text: root.label
+            text: (root.showReset && root.resetTime) ? (root.label + " (" + root.resetTime + ")") : root.label
             font.family: PixelTheme.pixelFontFamily
             font.pixelSize: root.fontSize
             font.weight: PixelTheme.isRounded ? Font.Medium : Font.Normal
@@ -43,7 +48,7 @@ ColumnLayout {
         }
 
         Text {
-            text: "осталось " + root.percent + "%"
+            text: "осталось " + (root.showExact ? (root.exactPercent ? root.exactPercent.toFixed(1) : root.percent.toFixed(1)) : root.percent) + "%"
             font.family: PixelTheme.pixelFontFamily
             font.pixelSize: root.fontSize
             font.weight: PixelTheme.isRounded ? Font.DemiBold : Font.Normal
@@ -67,7 +72,11 @@ ColumnLayout {
         Loader {
             anchors.fill: parent
             anchors.margins: PixelTheme.isRounded && !PixelTheme.isPixelFont ? 2 : 1
-            sourceComponent: PixelTheme.isRounded && !PixelTheme.isPixelFont ? continuousBarComp : segmentedBarComp
+            sourceComponent: {
+                if (root.barStyle === "continuous") return continuousBarComp;
+                if (root.barStyle === "segmented") return segmentedBarComp;
+                return (PixelTheme.isRounded && !PixelTheme.isPixelFont) ? continuousBarComp : segmentedBarComp;
+            }
         }
 
         // 1. Continuous Pill Progress Bar (Material 3 Expressive, Catppuccin, Tokyo Night)

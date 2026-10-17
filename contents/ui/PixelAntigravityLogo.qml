@@ -7,34 +7,35 @@ Item {
 
     property string status: "отдыхает"
     property int pixelScale: 5
+    property bool animated: true
 
     // 12 columns x 10 rows matrix matching the official Antigravity logo
     readonly property int gridCols: 12
     readonly property int gridRows: 10
 
     implicitWidth: gridCols * pixelScale
-    implicitHeight: gridRows * pixelScale
+    implicitHeight: (gridRows * pixelScale) + (animated ? 8 : 0)
 
     property real floatOffset: 0
     property int shimmerStep: 0
 
     // Gentle levitation animation
     SequentialAnimation {
-        running: root.status !== "спит"
+        running: root.animated && root.status !== "спит"
         loops: Animation.Infinite
 
         NumberAnimation {
             target: root
             property: "floatOffset"
             from: 0
-            to: -3
+            to: -4
             duration: root.status === "работает" ? 500 : (root.status === "думает" ? 900 : 1400)
             easing.type: Easing.InOutQuad
         }
         NumberAnimation {
             target: root
             property: "floatOffset"
-            from: -3
+            from: -4
             to: 0
             duration: root.status === "работает" ? 500 : (root.status === "думает" ? 900 : 1400)
             easing.type: Easing.InOutQuad
@@ -44,7 +45,7 @@ Item {
     // Shimmer/pulse step timer for active thinking/working states
     Timer {
         interval: root.status === "работает" ? 100 : 150
-        running: root.status === "думает" || root.status === "работает"
+        running: root.animated && (root.status === "думает" || root.status === "работает")
         repeat: true
         onTriggered: {
             root.shimmerStep = (root.shimmerStep + 1) % 12
@@ -58,8 +59,10 @@ Item {
 
     Canvas {
         id: canvas
-        anchors.fill: parent
-        anchors.topMargin: root.floatOffset
+        width: root.gridCols * root.pixelScale
+        height: root.gridRows * root.pixelScale
+        anchors.horizontalCenter: parent.horizontalCenter
+        y: (root.animated ? 4 + root.floatOffset : 0)
         renderStrategy: Canvas.Immediate
         renderTarget: Canvas.FramebufferObject
 

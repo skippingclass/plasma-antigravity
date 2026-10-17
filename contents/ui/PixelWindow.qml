@@ -11,10 +11,19 @@ Rectangle {
     property string statusText: "отдыхает"
     property string bar1Label: "5 часов"
     property int bar1Percent: 72
+    property real bar1Exact: 72.0
+    property string bar1Reset: ""
     property string bar2Label: "неделя"
     property int bar2Percent: 95
+    property real bar2Exact: 95.0
+    property string bar2Reset: ""
     property string colorScheme: "green"
     property string themeName: "retro_pixel"
+    property bool showTitleBar: true
+    property bool enableAnimation: true
+    property bool showExactPercent: false
+    property bool showResetTimes: false
+    property string barStyle: "auto"
 
     implicitWidth: 220
     implicitHeight: 215
@@ -54,15 +63,15 @@ Rectangle {
     }
 
     // Proportional dimensions
-    readonly property int titleBarHeight: Math.max(22, Math.min(38, Math.round(root.height * 0.11)))
+    readonly property int titleBarHeight: root.showTitleBar ? Math.max(22, Math.min(38, Math.round(root.height * 0.11))) : 0
     readonly property int availableBodyHeight: Math.max(50, root.height - titleBarHeight)
     readonly property real spacingScale: Math.max(0.8, Math.min(2.5, root.height / 220.0))
 
-    // Dynamic mascot scale: fills ~38% of available body height and fits within window width
-    readonly property int dynamicMascotScale: Math.max(3, Math.min(14, Math.floor(Math.min((root.width - 36) / 14, (availableBodyHeight * 0.38) / 10))))
+    // Dynamic mascot scale: fills ~32% of available body height and fits within window width with generous breathing room
+    readonly property int dynamicMascotScale: Math.max(3, Math.min(12, Math.floor(Math.min((root.width - 44) / 14, (availableBodyHeight * 0.32) / 10))))
 
     // Dynamic font and bar sizes
-    readonly property int titleFontSize: Math.max(10, Math.min(16, Math.round(titleBarHeight * 0.50)))
+    readonly property int titleFontSize: Math.max(10, Math.min(16, Math.round(Math.max(22, root.height * 0.11) * 0.50)))
     readonly property int statusFontSize: Math.max(11, Math.min(22, Math.round(dynamicMascotScale * 2.2)))
     readonly property int barFontSize: Math.max(9, Math.min(18, Math.round(dynamicMascotScale * 1.8)))
     readonly property int barHeight: Math.max(10, Math.min(24, Math.round(dynamicMascotScale * 2.0)))
@@ -74,6 +83,7 @@ Rectangle {
 
         // 1. Title Bar
         Rectangle {
+            visible: root.showTitleBar
             Layout.fillWidth: true
             implicitHeight: root.titleBarHeight
             color: PixelTheme.headerBg
@@ -105,7 +115,7 @@ Rectangle {
                 anchors.rightMargin: Math.max(8, Math.round(8 * root.spacingScale))
                 spacing: Math.max(6, Math.round(6 * root.spacingScale))
 
-                // Left mini icon
+                // Left mini icon: always clean, crisp and static (never bounces in titlebar)
                 Item {
                     readonly property int iconScale: Math.max(1, Math.round(root.titleBarHeight / 22))
                     implicitWidth: 12 * iconScale
@@ -114,7 +124,8 @@ Rectangle {
                     PixelAntigravityLogo {
                         anchors.centerIn: parent
                         pixelScale: parent.iconScale
-                        status: root.statusText
+                        animated: false
+                        status: "отдыхает"
                     }
                 }
 
@@ -146,12 +157,12 @@ Rectangle {
                 anchors.rightMargin: root.horizPadding
                 spacing: 0
 
-                // Top flexible spacer
+                // Top flexible spacer: generous minimum breathing room so mascot never touches the top
                 Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    Layout.minimumHeight: 2
-                    Layout.maximumHeight: Math.round(20 * root.spacingScale)
+                    Layout.minimumHeight: Math.max(8, Math.round(12 * root.spacingScale))
+                    Layout.maximumHeight: Math.round(26 * root.spacingScale)
                 }
 
                 // Mascot & Status Area
@@ -169,6 +180,7 @@ Rectangle {
                             anchors.centerIn: parent
                             status: root.statusText
                             pixelScale: root.dynamicMascotScale
+                            animated: root.enableAnimation
                         }
                     }
 
@@ -203,6 +215,11 @@ Rectangle {
                         isSecondBar: false
                         label: root.bar1Label
                         percent: root.bar1Percent
+                        exactPercent: root.bar1Exact
+                        resetTime: root.bar1Reset
+                        showExact: root.showExactPercent
+                        showReset: root.showResetTimes
+                        barStyle: root.barStyle
                         colorScheme: root.colorScheme
                         fontSize: root.barFontSize
                         barHeight: root.barHeight
@@ -213,6 +230,11 @@ Rectangle {
                         isSecondBar: true
                         label: root.bar2Label
                         percent: root.bar2Percent
+                        exactPercent: root.bar2Exact
+                        resetTime: root.bar2Reset
+                        showExact: root.showExactPercent
+                        showReset: root.showResetTimes
+                        barStyle: root.barStyle
                         colorScheme: root.colorScheme
                         fontSize: root.barFontSize
                         barHeight: root.barHeight
@@ -223,8 +245,8 @@ Rectangle {
                 Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    Layout.minimumHeight: 4
-                    Layout.maximumHeight: Math.round(20 * root.spacingScale)
+                    Layout.minimumHeight: 6
+                    Layout.maximumHeight: Math.round(22 * root.spacingScale)
                 }
             }
         }

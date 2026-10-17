@@ -38,5 +38,20 @@
         <entry name="theme" type="String">
             <default>retro_pixel</default>
         </entry>
+        <entry name="showTitleBar" type="Bool">
+            <default>true</default>
+        </entry>
+        <entry name="enableAnimation" type="Bool">
+            <default>true</default>
+        </entry>
+        <entry name="showExactPercent" type="Bool">
+            <default>false</default>
+        </entry>
+        <entry name="showResetTimes" type="Bool">
+            <default>false</default>
+        </entry>
+        <entry name="barStyle" type="String">
+            <default>auto</default>
+        </entry>
     </group>
 </kcfg>

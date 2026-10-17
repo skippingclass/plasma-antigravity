@@ -13,14 +13,17 @@ KCM.SimpleKCM {
     property alias cfg_titleText: titleField.text
     property string cfg_colorScheme: colorSchemeCombo.currentValue
     property string cfg_theme: themeCombo.currentValue
+    property alias cfg_showTitleBar: showTitleBarCheck.checked
+    property alias cfg_enableAnimation: enableAnimationCheck.checked
+    property alias cfg_showExactPercent: showExactPercentCheck.checked
+    property alias cfg_showResetTimes: showResetTimesCheck.checked
+    property string cfg_barStyle: barStyleCombo.currentValue
 
     Kirigami.FormLayout {
 
-        QQC2.TextField {
-            id: titleField
-            Kirigami.FormData.label: i18n("Window Title:")
-            placeholderText: "antigravity.exe"
-            Layout.fillWidth: true
+        Kirigami.Separator {
+            Kirigami.FormData.isSection: true
+            Kirigami.FormData.label: i18n("Theme & Palette")
         }
 
         QQC2.ComboBox {
@@ -48,7 +51,7 @@ KCM.SimpleKCM {
 
         QQC2.ComboBox {
             id: colorSchemeCombo
-            Kirigami.FormData.label: i18n("Segment Accent:")
+            Kirigami.FormData.label: i18n("Accent Color:")
             textRole: "text"
             valueRole: "value"
             model: [
@@ -63,6 +66,67 @@ KCM.SimpleKCM {
                 return 0;
             }
             onActivated: root.cfg_colorScheme = currentValue
+        }
+
+        QQC2.ComboBox {
+            id: barStyleCombo
+            Kirigami.FormData.label: i18n("Bar Style:")
+            textRole: "text"
+            valueRole: "value"
+            model: [
+                { text: i18n("Auto (Match Theme)"), value: "auto" },
+                { text: i18n("Segmented Blocks (Retro)"), value: "segmented" },
+                { text: i18n("Continuous Smooth (Pill)"), value: "continuous" }
+            ]
+            currentIndex: {
+                for (let i = 0; i < count; i++) {
+                    if (model[i].value === root.cfg_barStyle) return i;
+                }
+                return 0;
+            }
+            onActivated: root.cfg_barStyle = currentValue
+        }
+
+        Kirigami.Separator {
+            Kirigami.FormData.isSection: true
+            Kirigami.FormData.label: i18n("Window Frame & Title")
+        }
+
+        QQC2.CheckBox {
+            id: showTitleBarCheck
+            Kirigami.FormData.label: i18n("Title Bar:")
+            text: i18n("Show window title bar and icon")
+        }
+
+        QQC2.TextField {
+            id: titleField
+            Kirigami.FormData.label: i18n("Window Title:")
+            placeholderText: "antigravity.exe"
+            enabled: showTitleBarCheck.checked
+            Layout.fillWidth: true
+        }
+
+        Kirigami.Separator {
+            Kirigami.FormData.isSection: true
+            Kirigami.FormData.label: i18n("Mascot & Details")
+        }
+
+        QQC2.CheckBox {
+            id: enableAnimationCheck
+            Kirigami.FormData.label: i18n("Animation:")
+            text: i18n("Enable floating mascot levitation and shimmer")
+        }
+
+        QQC2.CheckBox {
+            id: showExactPercentCheck
+            Kirigami.FormData.label: i18n("Decimals:")
+            text: i18n("Display exact percentages (e.g. 51.2%)")
+        }
+
+        QQC2.CheckBox {
+            id: showResetTimesCheck
+            Kirigami.FormData.label: i18n("Reset Times:")
+            text: i18n("Show quota reset timer next to labels (e.g. 5 часов (11м))")
         }
     }
 }

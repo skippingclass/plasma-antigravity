@@ -16,6 +16,15 @@ Item {
     required property string colorScheme
 
     property string themeName: "retro_pixel"
+    property bool showTitleBar: true
+    property bool enableAnimation: true
+    property bool showExactPercent: false
+    property bool showResetTimes: false
+    property string barStyle: "auto"
+    property real bar1Exact: 0.0
+    property real bar2Exact: 0.0
+    property string bar1Reset: ""
+    property string bar2Reset: ""
 
     implicitWidth: 220
     implicitHeight: 215
@@ -30,9 +39,18 @@ Item {
         statusText: root.statusText
         bar1Label: root.bar1Label
         bar1Percent: root.bar1Percent
+        bar1Exact: root.bar1Exact
+        bar1Reset: root.bar1Reset
         bar2Label: root.bar2Label
         bar2Percent: root.bar2Percent
+        bar2Exact: root.bar2Exact
+        bar2Reset: root.bar2Reset
         colorScheme: root.colorScheme
         themeName: root.themeName
+        showTitleBar: root.showTitleBar
+        enableAnimation: root.enableAnimation
+        showExactPercent: root.showExactPercent
+        showResetTimes: root.showResetTimes
+        barStyle: root.barStyle
     }
 }
