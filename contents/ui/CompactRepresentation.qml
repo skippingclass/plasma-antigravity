@@ -36,9 +36,10 @@ Item {
         Rectangle {
             anchors.bottom: parent.bottom
             anchors.right: parent.right
-            width: 4
-            height: 4
-            color: root.statusText === "спит" ? "#666677" : PixelTheme.greenNeon
+            width: 5
+            height: 5
+            radius: PixelTheme.isRounded ? 2.5 : 0
+            color: PixelTheme.getStatusColor(root.statusText)
             border.color: "#111116"
             border.width: 1
         }

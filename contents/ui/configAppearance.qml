@@ -11,7 +11,6 @@ KCM.SimpleKCM {
     id: root
 
     property alias cfg_titleText: titleField.text
-    property alias cfg_pixelScale: pixelScaleSpin.value
     property string cfg_colorScheme: colorSchemeCombo.currentValue
     property string cfg_theme: themeCombo.currentValue
 
@@ -64,16 +63,6 @@ KCM.SimpleKCM {
                 return 0;
             }
             onActivated: root.cfg_colorScheme = currentValue
-        }
-
-        QQC2.SpinBox {
-            id: pixelScaleSpin
-            Kirigami.FormData.label: i18n("Pixel Scale:")
-            from: 1
-            to: 4
-            stepSize: 1
-            textFromValue: value => value + "x"
-            valueFromText: text => parseInt(text) || 2
         }
     }
 }

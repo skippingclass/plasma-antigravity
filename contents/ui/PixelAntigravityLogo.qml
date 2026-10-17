@@ -28,7 +28,7 @@ Item {
             property: "floatOffset"
             from: 0
             to: -3
-            duration: root.status === "работает" ? 600 : 1300
+            duration: root.status === "работает" ? 500 : (root.status === "думает" ? 900 : 1400)
             easing.type: Easing.InOutQuad
         }
         NumberAnimation {
@@ -36,18 +36,18 @@ Item {
             property: "floatOffset"
             from: -3
             to: 0
-            duration: root.status === "работает" ? 600 : 1300
+            duration: root.status === "работает" ? 500 : (root.status === "думает" ? 900 : 1400)
             easing.type: Easing.InOutQuad
         }
     }
 
     // Shimmer/pulse step timer for active thinking/working states
     Timer {
-        interval: 140
+        interval: root.status === "работает" ? 100 : 150
         running: root.status === "думает" || root.status === "работает"
         repeat: true
         onTriggered: {
-            root.shimmerStep = (root.shimmerStep + 1) % 10
+            root.shimmerStep = (root.shimmerStep + 1) % 12
             canvas.requestPaint()
         }
     }
@@ -99,9 +99,16 @@ Item {
                     } else if (root.status === "ошибка") {
                         // Red tint error
                         finalColor = "#e63946";
-                    } else if (root.status === "думает" || root.status === "работает") {
-                        // Moving light wave through the arch
-                        if ((r + c + root.shimmerStep) % 7 === 0) {
+                    } else if (root.status === "думает") {
+                        // Smooth upward cyan/lavender thought wave
+                        if (((rows - r) + c + root.shimmerStep) % 6 === 0) {
+                            finalColor = "#a6eeff";
+                        } else if (((rows - r) + c + root.shimmerStep) % 6 === 1) {
+                            finalColor = "#d0bcff";
+                        }
+                    } else if (root.status === "работает") {
+                        // High-energy bright white wave
+                        if ((r + c + root.shimmerStep) % 5 === 0) {
                             finalColor = "#ffffff";
                         }
                     }

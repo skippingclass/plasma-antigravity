@@ -245,23 +245,43 @@ QtObject {
     readonly property bool isPixelFont: currentThemeData.isPixelFont
     readonly property bool isRounded: currentThemeData.isRounded
 
-    // Dynamic warning colors for low quotas
-    function getBarColor(isSecondBar, percent) {
+    function getStatusColor(status) {
+        if (status === "спит") return textMuted;
+        if (status === "ошибка") return "#f0504c";
+        if (status === "думает") return activeColor2;
+        if (status === "работает") return activeColor;
+        return textPrimary;
+    }
+
+    // Dynamic warning colors and custom accent overrides for quota bars
+    function getBarColor(isSecondBar, percent, scheme) {
         if (percent !== undefined && percent < 15) {
             return "#f0504c";
         }
         if (percent !== undefined && percent < 30) {
             return "#f0b84c";
         }
+        if (scheme === "cyan") {
+            return isSecondBar ? "#38bdf8" : "#00f0ff";
+        }
+        if (scheme === "amber") {
+            return isSecondBar ? "#fb923c" : "#fbbf24";
+        }
         return isSecondBar ? activeColor2 : activeColor;
     }
 
-    function getBarDimColor(isSecondBar, percent) {
+    function getBarDimColor(isSecondBar, percent, scheme) {
         if (percent !== undefined && percent < 15) {
             return "#351a19";
         }
         if (percent !== undefined && percent < 30) {
             return "#352919";
+        }
+        if (scheme === "cyan") {
+            return "#122b38";
+        }
+        if (scheme === "amber") {
+            return "#362812";
         }
         return isSecondBar ? dimColor2 : dimColor;
     }

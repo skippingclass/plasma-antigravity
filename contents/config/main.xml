@@ -32,9 +32,6 @@
         <entry name="pollInterval" type="Int">
             <default>1</default>
         </entry>
-        <entry name="pixelScale" type="Int">
-            <default>2</default>
-        </entry>
         <entry name="colorScheme" type="String">
             <default>green</default>
         </entry>

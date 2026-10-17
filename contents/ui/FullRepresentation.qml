@@ -14,7 +14,6 @@ Item {
     required property string bar2Label
     required property int bar2Percent
     required property string colorScheme
-    required property int pixelScale
 
     property string themeName: "retro_pixel"
 
@@ -35,6 +34,5 @@ Item {
         bar2Percent: root.bar2Percent
         colorScheme: root.colorScheme
         themeName: root.themeName
-        pixelScale: root.pixelScale
     }
 }

@@ -33,7 +33,12 @@ PlasmoidItem {
     readonly property string currentBar2Reset: monitor.bar2Reset
     readonly property string currentColorScheme: Plasmoid.configuration.colorScheme
     readonly property string currentTheme: Plasmoid.configuration.theme ? Plasmoid.configuration.theme : "retro_pixel"
-    readonly property int currentPixelScale: Plasmoid.configuration.pixelScale
+    Plasmoid.toolTipMainText: "Antigravity: " + root.currentStatus
+    Plasmoid.toolTipSubText: {
+        const b1 = root.currentBar1Label + ": " + root.currentBar1Exact.toFixed(1) + "%" + (root.currentBar1Reset ? " (сброс: " + root.currentBar1Reset + ")" : "");
+        const b2 = root.currentBar2Label + ": " + root.currentBar2Exact.toFixed(1) + "%" + (root.currentBar2Reset ? " (сброс: " + root.currentBar2Reset + ")" : "");
+        return b1 + "\n" + b2;
+    }
 
     Component.onCompleted: {
         PixelTheme.activeThemeId = root.currentTheme;
@@ -63,6 +68,5 @@ PlasmoidItem {
         bar2Percent: root.currentBar2Val
         colorScheme: root.currentColorScheme
         themeName: root.currentTheme
-        pixelScale: root.currentPixelScale
     }
 }

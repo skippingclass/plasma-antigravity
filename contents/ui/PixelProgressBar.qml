@@ -16,8 +16,8 @@ ColumnLayout {
 
     spacing: Math.max(2, Math.round(root.fontSize * 0.25))
 
-    readonly property color activeColor: PixelTheme.getBarColor(root.isSecondBar, root.percent)
-    readonly property color dimColor: PixelTheme.getBarDimColor(root.isSecondBar, root.percent)
+    readonly property color activeColor: PixelTheme.getBarColor(root.isSecondBar, root.percent, root.colorScheme)
+    readonly property color dimColor: PixelTheme.getBarDimColor(root.isSecondBar, root.percent, root.colorScheme)
 
     // Number of active filled blocks
     readonly property int activeCount: Math.max(0, Math.min(root.totalSegments, Math.round((root.percent / 100.0) * root.totalSegments)))

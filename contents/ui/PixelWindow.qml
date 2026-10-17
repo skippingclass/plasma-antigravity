@@ -15,7 +15,6 @@ Rectangle {
     property int bar2Percent: 95
     property string colorScheme: "green"
     property string themeName: "retro_pixel"
-    property int pixelScale: 2
 
     implicitWidth: 220
     implicitHeight: 215
@@ -180,7 +179,7 @@ Rectangle {
                         font.pixelSize: root.statusFontSize
                         font.weight: PixelTheme.isRounded ? Font.DemiBold : Font.Normal
                         font.letterSpacing: PixelTheme.isRounded ? 0.3 : 0
-                        color: PixelTheme.textPrimary
+                        color: root.statusText === "спит" ? PixelTheme.textMuted : PixelTheme.getStatusColor(root.statusText)
                         renderType: PixelTheme.isPixelFont ? Text.NativeRendering : Text.QtRendering
                         antialiasing: !PixelTheme.isPixelFont
                     }
