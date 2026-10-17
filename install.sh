@@ -42,7 +42,12 @@ echo -e "${GREEN}==> Successfully installed $PLUGIN_ID!${NC}"
 
 if [[ "$1" == "--restart-plasma" || "$2" == "--restart-plasma" ]]; then
     echo -e "${BLUE}==> Restarting Plasma Shell...${NC}"
-    systemctl --user restart plasma-plasmashell.service 2>/dev/null || kquitapp6 plasmashell && kstart5 plasmashell &
+    if systemctl --user is-active --quiet plasma-plasmashell.service 2>/dev/null; then
+        systemctl --user restart plasma-plasmashell.service
+    else
+        kquitapp6 plasmashell 2>/dev/null || true
+        plasmashell &>/dev/null &
+    fi
     echo -e "${GREEN}==> Plasma Shell restarted.${NC}"
 else
     echo -e "\n${BLUE}Next steps:${NC}"
