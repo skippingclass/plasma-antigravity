@@ -102,7 +102,7 @@ KCM.SimpleKCM {
         QQC2.TextField {
             id: titleField
             Kirigami.FormData.label: i18n("Window Title:")
-            placeholderText: "antigravity.sh"
+            placeholderText: i18n("Automatic (selected service)")
             enabled: showTitleBarCheck.checked
             Layout.fillWidth: true
         }

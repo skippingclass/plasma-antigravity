@@ -16,12 +16,25 @@ PlasmoidItem {
     
     Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
 
-    // Antigravity background monitor
+    readonly property string provider: Plasmoid.configuration.provider === "codex" ? "codex" : "antigravity"
+    readonly property string providerName: provider === "codex" ? "Codex" : "Antigravity"
+
+    PixelTheme {
+        id: visualTheme
+        activeThemeId: root.currentTheme
+    }
+
+    // Per-instance provider monitor
     AntigravityMonitor {
         id: monitor
     }
 
-    readonly property string currentTitle: (Plasmoid.configuration.titleText && Plasmoid.configuration.titleText !== "antigravity.exe") ? Plasmoid.configuration.titleText : "antigravity.sh"
+    readonly property string currentTitle: {
+        const title = Plasmoid.configuration.titleText;
+        if (!title || ["antigravity.sh", "antigravity.exe", "codex.sh"].indexOf(title) !== -1)
+            return root.provider === "codex" ? "codex.sh" : "antigravity.sh";
+        return title;
+    }
     readonly property string currentStatus: monitor.currentStatus
     readonly property string currentBar1Label: monitor.bar1Label
     readonly property int currentBar1Val: monitor.bar1Val
@@ -33,33 +46,30 @@ PlasmoidItem {
     readonly property string currentBar2Reset: monitor.bar2Reset
     readonly property string currentColorScheme: Plasmoid.configuration.colorScheme
     readonly property string currentTheme: Plasmoid.configuration.theme ? Plasmoid.configuration.theme : "retro_pixel"
-    toolTipMainText: "Antigravity: " + root.currentStatus
+    toolTipMainText: root.providerName + ": " + root.currentStatus
     toolTipSubText: {
-        const b1 = root.currentBar1Label + ": " + root.currentBar1Exact.toFixed(1) + "%" + (root.currentBar1Reset ? " (сброс: " + root.currentBar1Reset + ")" : "");
-        const b2 = root.currentBar2Label + ": " + root.currentBar2Exact.toFixed(1) + "%" + (root.currentBar2Reset ? " (сброс: " + root.currentBar2Reset + ")" : "");
-        return b1 + "\n" + b2;
-    }
-
-    Component.onCompleted: {
-        PixelTheme.activeThemeId = root.currentTheme;
-    }
-
-    Connections {
-        target: Plasmoid.configuration
-        function onThemeChanged() {
-            PixelTheme.activeThemeId = Plasmoid.configuration.theme ? Plasmoid.configuration.theme : "retro_pixel";
-        }
+        const describe = (label, value, reset) => label + ": " + (value < 0 ? "нет данных" : value.toFixed(1) + "% осталось") + (reset ? " (сброс: " + reset + ")" : "");
+        const lines = [describe(root.currentBar1Label, root.currentBar1Exact, root.currentBar1Reset),
+                       describe(root.currentBar2Label, root.currentBar2Exact, root.currentBar2Reset)];
+        if (monitor.quotaError) lines.push(monitor.quotaError);
+        if (monitor.quotaStale) lines.push("Данные устарели; ожидается обновление");
+        return lines.join("\n");
     }
 
     preferredRepresentation: isPlanar ? fullRepresentation : compactRepresentation
 
     compactRepresentation: CompactRepresentation {
+        onToggleRequested: root.expanded = !root.expanded
+        provider: root.provider
+        theme: visualTheme
         statusText: root.currentStatus
         bar1Val: root.currentBar1Val
         colorScheme: root.currentColorScheme
     }
 
     fullRepresentation: FullRepresentation {
+        provider: root.provider
+        theme: visualTheme
         titleText: root.currentTitle
         statusText: root.currentStatus
         bar1Label: root.currentBar1Label

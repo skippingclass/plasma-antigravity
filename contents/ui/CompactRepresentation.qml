@@ -2,11 +2,15 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Layouts
-import org.kde.plasma.plasmoid
 import org.kde.kirigami as Kirigami
 
 Item {
     id: root
+
+    property string provider: "antigravity"
+    property PixelTheme theme: PixelTheme {}
+
+    signal toggleRequested()
 
     property string statusText: "отдыхает"
     property int bar1Val: 99
@@ -18,7 +22,7 @@ Item {
     MouseArea {
         anchors.fill: parent
         cursorShape: Qt.PointingHandCursor
-        onClicked: Plasmoid.expanded = !Plasmoid.expanded
+        onClicked: root.toggleRequested()
     }
 
     Item {
@@ -26,7 +30,8 @@ Item {
         width: 24
         height: 20
 
-        PixelAntigravityLogo {
+        PixelProviderLogo {
+                            provider: root.provider
             anchors.centerIn: parent
             status: root.statusText
             pixelScale: 2
@@ -38,8 +43,8 @@ Item {
             anchors.right: parent.right
             width: 5
             height: 5
-            radius: PixelTheme.isRounded ? 2.5 : 0
-            color: PixelTheme.getStatusColor(root.statusText)
+            radius: root.theme.isRounded ? 2.5 : 0
+            color: root.theme.getStatusColor(root.statusText)
             border.color: "#111116"
             border.width: 1
         }

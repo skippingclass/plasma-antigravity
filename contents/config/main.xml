@@ -5,8 +5,14 @@
       http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
     <kcfgfile name=""/>
     <group name="General">
+        <entry name="provider" type="String">
+            <default>antigravity</default>
+        </entry>
         <entry name="titleText" type="String">
             <default>antigravity.sh</default>
+        </entry>
+        <entry name="lastKnownQuotas" type="String">
+            <default>{}</default>
         </entry>
         <entry name="statusText" type="String">
             <default>отдыхает</default>
@@ -15,13 +21,13 @@
             <default>5 часов</default>
         </entry>
         <entry name="bar1Percent" type="Int">
-            <default>99</default>
+            <default>-1</default>
         </entry>
         <entry name="bar2Label" type="String">
             <default>неделя</default>
         </entry>
         <entry name="bar2Percent" type="Int">
-            <default>88</default>
+            <default>-1</default>
         </entry>
         <entry name="enableCliMonitoring" type="Bool">
             <default>true</default>

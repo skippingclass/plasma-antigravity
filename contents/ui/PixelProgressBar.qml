@@ -6,6 +6,8 @@ import QtQuick.Layouts
 ColumnLayout {
     id: root
 
+    property PixelTheme theme: PixelTheme {}
+
     property string label: "5 часов"
     property int percent: 99
     property real exactPercent: 99.0
@@ -21,48 +23,56 @@ ColumnLayout {
 
     spacing: Math.max(2, Math.round(root.fontSize * 0.25))
 
-    readonly property color activeColor: PixelTheme.getBarColor(root.isSecondBar, root.percent, root.colorScheme)
-    readonly property color dimColor: PixelTheme.getBarDimColor(root.isSecondBar, root.percent, root.colorScheme)
+    readonly property color activeColor: root.percent < 0 ? root.theme.textMuted : root.theme.getBarColor(root.isSecondBar, root.percent, root.colorScheme)
+    readonly property color dimColor: root.percent < 0 ? root.theme.slotBg : root.theme.getBarDimColor(root.isSecondBar, root.percent, root.colorScheme)
 
     // Number of active filled blocks
     readonly property int activeCount: Math.max(0, Math.min(root.totalSegments, Math.round((root.percent / 100.0) * root.totalSegments)))
 
     // Label Row: "5 часов" on left, "осталось XX%" on right
-    RowLayout {
+    Item {
         Layout.fillWidth: true
-        spacing: 0
+        implicitHeight: Math.max(labelText.implicitHeight, valueText.implicitHeight)
 
         Text {
+            id: labelText
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+            width: Math.min(implicitWidth, parent.width * 0.38)
             text: root.label
-            font.family: PixelTheme.pixelFontFamily
+            elide: Text.ElideRight
+            font.family: root.theme.pixelFontFamily
             font.pixelSize: root.fontSize
-            font.weight: PixelTheme.isRounded ? Font.Medium : Font.Normal
-            font.letterSpacing: PixelTheme.isRounded ? 0.1 : 0
-            color: PixelTheme.textLabel
-            renderType: PixelTheme.isPixelFont ? Text.NativeRendering : Text.QtRendering
-            antialiasing: !PixelTheme.isPixelFont
-        }
-
-        Item {
-            Layout.fillWidth: true
-            Layout.minimumWidth: 8
+            font.weight: root.theme.isRounded ? Font.Medium : Font.Normal
+            font.letterSpacing: root.theme.isRounded ? 0.1 : 0
+            color: root.theme.textLabel
+            renderType: root.theme.isPixelFont ? Text.NativeRendering : Text.QtRendering
+            antialiasing: !root.theme.isPixelFont
         }
 
         Text {
+            id: valueText
+            anchors.left: labelText.right
+            anchors.leftMargin: 8
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            horizontalAlignment: Text.AlignRight
+            elide: Text.ElideRight
             text: {
-                const val = (root.showExact ? (root.exactPercent ? root.exactPercent.toFixed(1) : root.percent.toFixed(1)) : root.percent) + "%";
+                if (root.percent < 0) return "нет данных";
+                const val = (root.showExact ? root.exactPercent.toFixed(1) : root.percent) + "%";
                 if (root.showReset && root.resetTime) {
                     return val + " (" + root.resetTime + ")";
                 }
                 return "осталось " + val;
             }
-            font.family: PixelTheme.pixelFontFamily
+            font.family: root.theme.pixelFontFamily
             font.pixelSize: root.fontSize
-            font.weight: PixelTheme.isRounded ? Font.DemiBold : Font.Normal
-            font.letterSpacing: PixelTheme.isRounded ? 0.2 : 0
+            font.weight: root.theme.isRounded ? Font.DemiBold : Font.Normal
+            font.letterSpacing: root.theme.isRounded ? 0.2 : 0
             color: root.activeColor
-            renderType: PixelTheme.isPixelFont ? Text.NativeRendering : Text.QtRendering
-            antialiasing: !PixelTheme.isPixelFont
+            renderType: root.theme.isPixelFont ? Text.NativeRendering : Text.QtRendering
+            antialiasing: !root.theme.isPixelFont
         }
     }
 
@@ -70,19 +80,19 @@ ColumnLayout {
     Rectangle {
         Layout.fillWidth: true
         implicitHeight: root.barHeight
-        color: PixelTheme.slotBg
-        border.color: PixelTheme.slotBorder
-        border.width: (PixelTheme.slotBorder !== "transparent" && PixelTheme.slotBorder !== "") ? 1 : 0
-        radius: PixelTheme.isRounded && !PixelTheme.isPixelFont ? height / 2 : PixelTheme.slotRadius
+        color: root.theme.slotBg
+        border.color: root.theme.slotBorder
+        border.width: (root.theme.slotBorder !== "transparent" && root.theme.slotBorder !== "") ? 1 : 0
+        radius: root.theme.isRounded && !root.theme.isPixelFont ? height / 2 : root.theme.slotRadius
 
         // Material 3 Continuous Pill Mode vs Retro Segmented Mode
         Loader {
             anchors.fill: parent
-            anchors.margins: PixelTheme.isRounded && !PixelTheme.isPixelFont ? 2 : 1
+            anchors.margins: root.theme.isRounded && !root.theme.isPixelFont ? 2 : 1
             sourceComponent: {
                 if (root.barStyle === "continuous") return continuousBarComp;
                 if (root.barStyle === "segmented") return segmentedBarComp;
-                return (PixelTheme.isRounded && !PixelTheme.isPixelFont) ? continuousBarComp : segmentedBarComp;
+                return (root.theme.isRounded && !root.theme.isPixelFont) ? continuousBarComp : segmentedBarComp;
             }
         }
 
@@ -126,7 +136,7 @@ ColumnLayout {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         color: isActive ? root.activeColor : root.dimColor
-                        radius: PixelTheme.slotRadius > 0 ? 1 : 0
+                        radius: root.theme.slotRadius > 0 ? 1 : 0
 
                         // Pixel 3D top shine
                         Rectangle {

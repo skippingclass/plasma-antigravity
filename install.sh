@@ -52,6 +52,6 @@ if [[ "$1" == "--restart-plasma" || "$2" == "--restart-plasma" ]]; then
 else
     echo -e "\n${BLUE}Next steps:${NC}"
     echo "  • Test standalone window:  ./test.sh"
-    echo "  • Right click Desktop → 'Add Widgets...' → search for 'Antigravity Status'"
+    echo "  • Right click Desktop → 'Add Widgets...' → search for 'Plasma AI Status'"
     echo "  • Restart Plasma shell:    systemctl --user restart plasma-plasmashell.service"
 fi

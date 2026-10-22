@@ -7,6 +7,9 @@ import org.kde.plasma.plasmoid
 Rectangle {
     id: root
 
+    property string provider: "antigravity"
+    property PixelTheme theme: PixelTheme {}
+
     property string titleText: "antigravity.sh"
     property string statusText: "отдыхает"
     property string bar1Label: "5 часов"
@@ -26,31 +29,20 @@ Rectangle {
     property string barStyle: "auto"
     property string mascotSize: "auto"
 
-    implicitWidth: 220
-    implicitHeight: 215
+    implicitWidth: 256
+    implicitHeight: 288
 
     // Fill parent if available
     width: parent ? parent.width : implicitWidth
     height: parent ? parent.height : implicitHeight
 
-    color: PixelTheme.windowBg
-    radius: PixelTheme.windowRadius
-    clip: PixelTheme.windowRadius > 0
-
-    onThemeNameChanged: {
-        if (themeName && themeName !== PixelTheme.activeThemeId) {
-            PixelTheme.activeThemeId = themeName;
-        }
-    }
-    Component.onCompleted: {
-        if (themeName) {
-            PixelTheme.activeThemeId = themeName;
-        }
-    }
+    color: root.theme.windowBg
+    radius: root.theme.windowRadius
+    clip: root.theme.windowRadius > 0
 
     // Retro / Expressive window frame border
-    border.color: PixelTheme.frameBorder
-    border.width: PixelTheme.frameBorderWidth
+    border.color: root.theme.frameBorder
+    border.width: root.theme.frameBorderWidth
 
     // Top highlight line for 3D bevel retro effect
     Rectangle {
@@ -58,8 +50,8 @@ Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right
         height: 1
-        color: PixelTheme.frameHighlight
-        visible: PixelTheme.frameHighlight !== "transparent"
+        color: root.theme.frameHighlight
+        visible: root.theme.frameHighlight !== "transparent"
         z: 2
     }
 
@@ -68,12 +60,13 @@ Rectangle {
     readonly property int availableBodyHeight: Math.max(50, root.height - titleBarHeight)
     readonly property real spacingScale: Math.max(0.8, Math.min(2.5, root.height / 220.0))
 
-    // Dynamic mascot scale: bold, juicy mascot (scale 7 at 220x215) with customizable options
+    // Reserve room for status, both bars and padding before choosing a logo size.
     readonly property int dynamicMascotScale: {
-        if (root.mascotSize === "small") return Math.max(3, Math.min(6, Math.floor((availableBodyHeight * 0.28) / 10)));
-        if (root.mascotSize === "medium") return Math.max(3, Math.min(8, Math.floor((availableBodyHeight * 0.33) / 10)));
-        if (root.mascotSize === "large") return Math.max(4, Math.min(14, Math.floor((availableBodyHeight * 0.42) / 10)));
-        return Math.max(4, Math.min(13, Math.floor(Math.min((root.width - 36) / 13, (availableBodyHeight * 0.38) / 10))));
+        const fraction = root.mascotSize === "small" ? 0.26 : root.mascotSize === "large" ? 0.40 : 0.31;
+        const requested = Math.floor(availableBodyHeight * fraction / 10);
+        const heightBudget = Math.floor((availableBodyHeight - 48 * spacingScale - (enableAnimation ? 8 : 0)) / 23);
+        const widthBudget = Math.floor((root.width - 2 * horizPadding) / 12);
+        return Math.max(2, Math.min(13, requested, heightBudget, widthBudget));
     }
 
     // Dynamic font and bar sizes
@@ -92,18 +85,18 @@ Rectangle {
             visible: root.showTitleBar
             Layout.fillWidth: true
             implicitHeight: root.titleBarHeight
-            color: PixelTheme.headerBg
+            color: root.theme.headerBg
             // Rounded top corners for Material 3 / Catppuccin
-            radius: PixelTheme.headerRadius
+            radius: root.theme.headerRadius
 
             // Bottom mask for rounded header so only top corners are round
             Rectangle {
                 anchors.bottom: parent.bottom
                 anchors.left: parent.left
                 anchors.right: parent.right
-                height: PixelTheme.headerRadius
-                color: PixelTheme.headerBg
-                visible: PixelTheme.headerRadius > 0
+                height: root.theme.headerRadius
+                color: root.theme.headerBg
+                visible: root.theme.headerRadius > 0
             }
 
             Rectangle {
@@ -111,8 +104,8 @@ Rectangle {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 height: 1
-                color: PixelTheme.headerBorder
-                visible: PixelTheme.headerBorder !== "transparent"
+                color: root.theme.headerBorder
+                visible: root.theme.headerBorder !== "transparent"
             }
 
             RowLayout {
@@ -127,7 +120,8 @@ Rectangle {
                     implicitWidth: 12 * iconScale
                     implicitHeight: 10 * iconScale
 
-                    PixelAntigravityLogo {
+                    PixelProviderLogo {
+                            provider: root.provider
                         anchors.centerIn: parent
                         pixelScale: parent.iconScale
                         animated: false
@@ -136,14 +130,14 @@ Rectangle {
                 }
 
                 Text {
-                    text: ((root.titleText === "antigravity.sh" || root.titleText === "antigravity.exe") && PixelTheme.isRounded) ? "Antigravity" : root.titleText
-                    font.family: PixelTheme.pixelFontFamily
+                    text: root.theme.isRounded && (root.titleText === "antigravity.sh" || root.titleText === "codex.sh") ? (root.provider === "codex" ? "Codex" : "Antigravity") : root.titleText
+                    font.family: root.theme.pixelFontFamily
                     font.pixelSize: root.titleFontSize
-                    font.weight: PixelTheme.isRounded ? Font.DemiBold : Font.Normal
-                    font.letterSpacing: PixelTheme.isRounded ? 0.2 : 0
-                    color: PixelTheme.textTitle
-                    renderType: PixelTheme.isPixelFont ? Text.NativeRendering : Text.QtRendering
-                    antialiasing: !PixelTheme.isPixelFont
+                    font.weight: root.theme.isRounded ? Font.DemiBold : Font.Normal
+                    font.letterSpacing: root.theme.isRounded ? 0.2 : 0
+                    color: root.theme.textTitle
+                    renderType: root.theme.isPixelFont ? Text.NativeRendering : Text.QtRendering
+                    antialiasing: !root.theme.isPixelFont
                 }
 
                 Item {
@@ -178,10 +172,12 @@ Rectangle {
 
                     Item {
                         Layout.alignment: Qt.AlignHCenter
+                        objectName: "mascotSlot"
                         implicitWidth: mascot.implicitWidth
                         implicitHeight: mascot.implicitHeight
 
-                        PixelAntigravityLogo {
+                        PixelProviderLogo {
+                            provider: root.provider
                             id: mascot
                             anchors.centerIn: parent
                             status: root.statusText
@@ -193,13 +189,13 @@ Rectangle {
                     Text {
                         Layout.alignment: Qt.AlignHCenter
                         text: root.statusText
-                        font.family: PixelTheme.pixelFontFamily
+                        font.family: root.theme.pixelFontFamily
                         font.pixelSize: root.statusFontSize
-                        font.weight: PixelTheme.isRounded ? Font.DemiBold : Font.Normal
-                        font.letterSpacing: PixelTheme.isRounded ? 0.3 : 0
-                        color: root.statusText === "спит" ? PixelTheme.textMuted : PixelTheme.getStatusColor(root.statusText)
-                        renderType: PixelTheme.isPixelFont ? Text.NativeRendering : Text.QtRendering
-                        antialiasing: !PixelTheme.isPixelFont
+                        font.weight: root.theme.isRounded ? Font.DemiBold : Font.Normal
+                        font.letterSpacing: root.theme.isRounded ? 0.3 : 0
+                        color: root.statusText === "спит" ? root.theme.textMuted : root.theme.getStatusColor(root.statusText)
+                        renderType: root.theme.isPixelFont ? Text.NativeRendering : Text.QtRendering
+                        antialiasing: !root.theme.isPixelFont
                     }
                 }
 
@@ -217,6 +213,8 @@ Rectangle {
                     spacing: Math.max(4, Math.round(6 * root.spacingScale))
 
                     PixelProgressBar {
+                        objectName: "quotaBar1"
+                        theme: root.theme
                         Layout.fillWidth: true
                         isSecondBar: false
                         label: root.bar1Label
@@ -232,6 +230,8 @@ Rectangle {
                     }
 
                     PixelProgressBar {
+                        objectName: "quotaBar2"
+                        theme: root.theme
                         Layout.fillWidth: true
                         isSecondBar: true
                         label: root.bar2Label

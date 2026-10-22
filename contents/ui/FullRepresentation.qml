@@ -7,6 +7,9 @@ import org.kde.plasma.plasmoid
 Item {
     id: root
 
+    property string provider: "antigravity"
+    property PixelTheme theme: PixelTheme {}
+
     required property string titleText
     required property string statusText
     required property string bar1Label
@@ -27,13 +30,17 @@ Item {
     property string bar1Reset: ""
     property string bar2Reset: ""
 
-    implicitWidth: 220
-    implicitHeight: 215
+    implicitWidth: 256
+    implicitHeight: 288
+    Layout.preferredWidth: 256
+    Layout.preferredHeight: 288
     Layout.minimumWidth: 160
     Layout.minimumHeight: 160
 
     PixelWindow {
         id: windowFrame
+        provider: root.provider
+        theme: root.theme
         anchors.fill: parent
         anchors.margins: 1
         titleText: root.titleText

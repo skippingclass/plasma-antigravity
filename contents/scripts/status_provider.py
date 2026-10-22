@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 import sys
+import argparse
+import hashlib
+import math
+import selectors
+import tempfile
 import os
 import re
 import glob
@@ -10,8 +15,6 @@ import sqlite3
 import subprocess
 from datetime import datetime, timezone
 
-CACHE_FILE = "/tmp/agy_quota_cache.json"
-LOCK_FILE = "/tmp/agy_quota_fetch.lock"
 CACHE_TTL = 60  # seconds
 
 GLOG_RE = re.compile(r"^[IWEF](\d{2})(\d{2})\s+(\d{2}):(\d{2}):(\d{2})\.(\d{6})")
@@ -31,7 +34,9 @@ STATUS_CANCELED = 4
 STATUS_INVALID = 5
 STATUS_RUNNING_ALT = 6
 STATUS_ERROR = 7
-ACTIVE_STATUSES = (STATUS_PENDING, STATUS_RUNNING, STATUS_RUNNING_ALT)
+STATUS_STREAMING = 8
+ACTIVE_STATUSES = (STATUS_PENDING, STATUS_RUNNING, STATUS_RUNNING_ALT, STATUS_STREAMING)
+TERMINAL_STATUSES = (STATUS_DONE, STATUS_CANCELED, STATUS_INVALID, STATUS_ERROR)
 
 STATUS_PRIORITY = {
     "спит": 0,
@@ -75,27 +80,50 @@ def check_custom_script(script_path):
     return None
 
 
-def get_active_agy_pids():
-    """Return all interactive agy CLI PIDs attached to a terminal (TTY/PTS)."""
-    pids = []
+def process_args(pid, proc_root="/proc"):
     try:
-        res = subprocess.run(["pgrep", "-x", "agy"], capture_output=True, text=True)
-        if res.returncode == 0:
-            for pid_str in res.stdout.strip().split():
-                try:
-                    pid = int(pid_str)
-                    fd0 = os.readlink(f"/proc/{pid}/fd/0")
-                    if not (fd0.startswith("/dev/pts/") or fd0.startswith("/dev/tty")):
-                        continue
-                    with open(f"/proc/{pid}/cmdline", "rb") as f:
-                        cmdline = f.read().decode("utf-8", errors="ignore")
-                    if "/usage" in cmdline or "--refresh-only" in cmdline or "\x00-p\x00" in cmdline:
-                        continue
-                    pids.append(pid)
-                except Exception:
-                    continue
-    except Exception:
-        pass
+        with open(f"{proc_root}/{pid}/cmdline", "rb") as stream:
+            return [os.fsdecode(arg) for arg in stream.read().split(b"\0") if arg]
+    except OSError:
+        return []
+
+
+def agy_prompt(args):
+    for index, arg in enumerate(args[1:], 1):
+        if arg in ("-p", "--print", "--prompt"):
+            return args[index + 1] if index + 1 < len(args) else ""
+        for flag in ("--print=", "--prompt=", "-p="):
+            if arg.startswith(flag):
+                return arg[len(flag):]
+    return None
+
+
+def is_agy_session(args):
+    if not args or os.path.basename(args[0]) not in ("agy", "antigravity-cli"):
+        return False
+    prompt = agy_prompt(args)
+    if prompt is not None:
+        # Only exclude the actual slash command, not prompts mentioning /usage.
+        return bool(prompt.strip()) and prompt.strip().split()[0] != "/usage"
+    if any(arg in ("--help", "-h", "--version", "-v") for arg in args[1:]):
+        return False
+    housekeeping = {"models", "mcp", "agent", "agents", "help", "install", "update",
+                    "plugin", "plugins", "remote-control", "mic-serve", "changelog"}
+    return len(args) < 2 or args[1] not in housekeeping
+
+
+def get_active_agy_pids(proc_root="/proc"):
+    """Track interactive AND headless agent sessions; TTY is not required."""
+    pids = []
+    for path in glob.glob(f"{proc_root}/[0-9]*/cmdline"):
+        try:
+            if os.stat(path).st_uid != os.getuid():
+                continue
+            pid = int(path.split("/")[-2])
+            if is_agy_session(process_args(pid, proc_root)):
+                pids.append(pid)
+        except (OSError, ValueError):
+            continue
     return pids
 
 
@@ -110,6 +138,38 @@ def decode_varint(buf, pos):
             return val, pos
         shift += 7
     return val, pos
+
+
+def protobuf_fields(buf):
+    """Read protobuf fields, tolerating a bounded prefix of a larger payload."""
+    pos = 0
+    while pos < len(buf):
+        tag, pos = decode_varint(buf, pos)
+        number, wire = tag >> 3, tag & 7
+        if not number:
+            return
+        if wire == 0:
+            value, pos = decode_varint(buf, pos)
+        elif wire == 2:
+            length, pos = decode_varint(buf, pos)
+            value = buf[pos:pos + length]
+            pos += length
+        elif wire in (1, 5):
+            pos += 8 if wire == 1 else 4
+            continue
+        else:
+            return
+        yield number, wire, value
+
+
+def planner_has_tool_calls(payload):
+    # CascadeStep.planner_response (20) -> repeated tool_calls (7).
+    # A completed planner message proposing tools is not the end of the turn.
+    for number, wire, response in protobuf_fields(payload or b""):
+        if number == 20 and wire == 2:
+            return any(field == 7 and kind == 2 and value
+                       for field, kind, value in protobuf_fields(response))
+    return False
 
 
 def parse_meta_timestamps(meta):
@@ -160,14 +220,16 @@ def get_latest_cancel_ts(log_file, cid=None):
         return 0
     try:
         with open(log_file, "r", errors="ignore") as f:
-            lines = f.readlines()[-60:]
+            f.seek(0, os.SEEK_END)
+            f.seek(max(0, f.tell() - 32768))
+            lines = f.read().splitlines()[-100:]
         for line in reversed(lines):
             if "Cancelling in-progress response" in line or "Cancelling conversation" in line or "context canceled" in line:
                 if cid and cid in line:
                     ts = parse_glog_timestamp(line)
                     if ts:
                         return ts
-                elif not cid:
+                elif not cid or not re.search(r"[0-9a-f]{8}-[0-9a-f-]{27,}", line):
                     ts = parse_glog_timestamp(line)
                     if ts:
                         return ts
@@ -210,7 +272,8 @@ def check_db_status(db_path, now, log_file=None):
         conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=0.2)
         cur = conn.cursor()
         cur.execute(
-            "SELECT idx, step_type, status, metadata, substr(step_payload, 1, 160) "
+            "SELECT idx, step_type, status, metadata, "
+            "substr(step_payload, 1, CASE WHEN step_type=15 AND status=3 THEN 65536 ELSE 1024 END) "
             "FROM steps WHERE step_type NOT IN (23, 90, 98, 101) "
             "ORDER BY idx DESC LIMIT 8"
         )
@@ -220,7 +283,7 @@ def check_db_status(db_path, now, log_file=None):
         return None
 
     if not rows:
-        return "отдыхает"
+        return None
 
     top_idx, top_type, top_status, top_meta, top_payload = rows[0]
     top_ts_map = parse_meta_timestamps(top_meta)
@@ -241,32 +304,38 @@ def check_db_status(db_path, now, log_file=None):
 
     # 4. If the turn finished with a completed planner response -> resting / idle
     if top_type == STEP_PLANNER_RESPONSE and top_status == STATUS_DONE:
-        return "отдыхает"
+        if planner_has_tool_calls(top_payload):
+            return "работает"
+        # Avoid a one-frame idle flash while the next tool step is being appended.
+        return "думает" if 0 <= top_age <= 2.0 else "отдыхает"
 
     # 5. Planner response actively streaming / thinking
-    if top_type == STEP_PLANNER_RESPONSE and top_status in ACTIVE_STATUSES:
-        if 0 <= top_age <= 20.0:
-            return "думает"
-        return "отдыхает"
+    if top_type == STEP_PLANNER_RESPONSE and top_status not in TERMINAL_STATUSES:
+        return "думает"
 
     # 6. User input just submitted -> thinking (starts in <50ms)
     if top_type == STEP_USER_INPUT:
-        if 0 <= top_age <= 3.5:
-            return "думает"
-        return "отдыхает"
+        # The process still owns this DB: long first-token/network waits are active.
+        return "думает"
 
     # 7. Top step is a tool
     if top_type in TOOL_STEP_TYPES:
-        if top_status in ACTIVE_STATUSES and 0 <= top_age <= 180.0:
+        if top_status not in TERMINAL_STATUSES:
             if top_payload and b"ask_question" in top_payload:
                 return "отдыхает"
             return "работает"
         if top_status == STATUS_DONE:
+            if top_payload and b"ask_question" in top_payload:
+                return "отдыхает"
             if 0 <= top_age <= 2.5:
                 return "работает"
-            if 0 <= top_age <= 6.0:
-                return "думает"
-            return "отдыхает"
+            return "думает"
+
+    if top_type not in (STEP_USER_INPUT, STEP_PLANNER_RESPONSE, STEP_ERROR_MESSAGE):
+        if top_status not in TERMINAL_STATUSES:
+            return "отдыхает" if top_payload and b"ask_question" in top_payload else "работает"
+        if top_status == STATUS_DONE:
+            return "думает"
 
     # 8. Check recent rows for any active concurrent tool
     for idx, st_type, status, meta, payload in rows[1:]:
@@ -274,7 +343,7 @@ def check_db_status(db_path, now, log_file=None):
             ts_map = parse_meta_timestamps(meta)
             latest_ts = max(ts_map.values()) if ts_map else 0
             age = (now - latest_ts) if latest_ts else 999999.0
-            if 0 <= age <= 180.0:
+            if latest_ts:
                 if payload and b"ask_question" in payload:
                     return "отдыхает"
                 return "работает"
@@ -284,14 +353,23 @@ def check_db_status(db_path, now, log_file=None):
 
 def check_single_pid_status(pid, now):
     dbs, log_file = inspect_pid_fds(pid)
-    best_status = "отдыхает"
-
-    for db_path in dbs:
-        st = check_db_status(db_path, now, log_file)
-        if st and STATUS_PRIORITY.get(st, 0) > STATUS_PRIORITY.get(best_status, 0):
-            best_status = st
-
-    return best_status
+    if log_file:
+        try:
+            with open(log_file, "rb") as stream:
+                stream.seek(0, os.SEEK_END)
+                stream.seek(max(0, stream.tell() - 8192))
+                log_tail = stream.read()
+            if b"CLI store manager shutting down" in log_tail:
+                return "отдыхает"
+        except OSError:
+            pass
+    statuses = [check_db_status(path, now, log_file) for path in dbs]
+    statuses = [status for status in statuses if status is not None]
+    if statuses:
+        return max(statuses, key=lambda status: STATUS_PRIORITY[status])
+    # A single-shot prompt is already work while the DB is being created.
+    # A streaming/interactive session with no submitted prompt can simply be idle.
+    return "думает" if agy_prompt(process_args(pid)) else "отдыхает"
 
 
 def check_agy_status(active_pids):
@@ -307,67 +385,21 @@ def check_agy_status(active_pids):
     return best_status
 
 
-def fetch_live_quota():
-    """Fetch exact quota from Antigravity CLI with a non-blocking file lock to prevent process stampedes."""
-    lock_fd = None
-    try:
-        lock_fd = open(LOCK_FILE, "w")
-        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except Exception:
-        if lock_fd:
-            lock_fd.close()
-        return None
-
+def fetch_agy_quota():
+    """Fetch Gemini quota from the official Antigravity usage command."""
     log_dir = os.path.expanduser("~/.gemini/antigravity-cli/log")
     before_logs = set(glob.glob(f"{log_dir}/cli-*.log")) if os.path.isdir(log_dir) else set()
 
     try:
         res = subprocess.run(
-            ["agy", "-p", "/usage", "--output-format", "json"],
+            ["agy", "-p", "/usage", "--output-format", "json", "--print-timeout", "20s"],
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=25,
         )
         if res.returncode == 0:
             data = json.loads(res.stdout.strip())
-            groups = data.get("command", {}).get("data", {}).get("groups", [])
-            gemini_group = next(
-                (g for g in groups if "gemini" in g.get("name", "").lower()),
-                groups[0] if groups else None,
-            )
-            if gemini_group:
-                rem_5h, rem_week = 100, 100
-                exact_5h, exact_week = 100.0, 100.0
-                reset_5h, reset_week = "", ""
-
-                for b in gemini_group.get("buckets", []):
-                    frac = b.get("remaining_fraction", 1.0)
-                    pct = max(0, min(100, int(round(frac * 100))))
-                    exact = round(frac * 100, 1)
-                    r_time = format_reset_time(b.get("reset_time", ""))
-
-                    if b.get("id") == "gemini-5h" or b.get("window") == "5h":
-                        rem_5h, exact_5h, reset_5h = pct, exact, r_time
-                    elif b.get("id") == "gemini-weekly" or b.get("window") == "weekly":
-                        rem_week, exact_week, reset_week = pct, exact, r_time
-
-                quota = {
-                    "bar1_label": "5 часов",
-                    "bar1_percent": rem_5h,
-                    "bar1_exact": exact_5h,
-                    "bar1_reset": reset_5h,
-                    "bar2_label": "неделя",
-                    "bar2_percent": rem_week,
-                    "bar2_exact": exact_week,
-                    "bar2_reset": reset_week,
-                    "timestamp": time.time(),
-                }
-                try:
-                    with open(CACHE_FILE, "w") as f:
-                        json.dump(quota, f)
-                except Exception:
-                    pass
-                return quota
+            return parse_agy_quota(data)
     except Exception:
         pass
     finally:
@@ -382,78 +414,355 @@ def fetch_live_quota():
                         os.remove(new_log)
                 except Exception:
                     pass
-        try:
-            fcntl.flock(lock_fd, fcntl.LOCK_UN)
-            lock_fd.close()
-        except Exception:
-            pass
     return None
 
 
-def get_agy_usage(is_active):
-    cached = None
-    if os.path.exists(CACHE_FILE):
-        try:
-            with open(CACHE_FILE, "r") as f:
-                cached = json.load(f)
-        except Exception:
-            pass
+def unknown_quota():
+    return {"bar1_label": "5 часов", "bar2_label": "неделя",
+            "bar1_percent": -1, "bar2_percent": -1,
+            "bar1_exact": -1, "bar2_exact": -1}
 
+
+def set_bucket(quota, index, remaining, reset_at=None):
+    remaining = float(remaining)
+    if not math.isfinite(remaining):
+        raise ValueError("Invalid quota percentage")
+    exact = round(max(0, min(100, remaining)), 1)
+    quota[f"bar{index}_percent"] = int(round(exact))
+    quota[f"bar{index}_exact"] = exact
+    if reset_at:
+        if isinstance(reset_at, str):
+            reset_at = datetime.fromisoformat(reset_at.replace("Z", "+00:00")).timestamp()
+        quota[f"bar{index}_resets_at"] = float(reset_at)
+
+
+def parse_agy_quota(data):
+    groups = data.get("command", {}).get("data", {}).get("groups", [])
+    group = next((g for g in groups if "gemini" in g.get("name", "").lower()), None)
+    if not group:
+        return None
+    quota = unknown_quota()
+    for bucket in group.get("buckets", []):
+        index = None
+        if bucket.get("id") == "gemini-5h" or bucket.get("window") == "5h":
+            index = 1
+        elif bucket.get("id") == "gemini-weekly" or bucket.get("window") == "weekly":
+            index = 2
+        if index and bucket.get("remaining_fraction") is not None:
+            set_bucket(quota, index, float(bucket["remaining_fraction"]) * 100, bucket.get("reset_time"))
+    return quota if any(quota[f"bar{i}_percent"] >= 0 for i in (1, 2)) else None
+
+
+def parse_codex_quota(result):
+    # Explicitly select the Codex bucket, never a separately metered model.
+    limits = (result.get("rateLimitsByLimitId") or {}).get("codex") or result.get("rateLimits")
+    if not limits or limits.get("limitId") not in (None, "codex"):
+        return None
+    quota = unknown_quota()
+    for index, name in ((1, "primary"), (2, "secondary")):
+        bucket = limits.get(name)
+        if not bucket or bucket.get("usedPercent") is None:
+            continue
+        set_bucket(quota, index, 100 - float(bucket["usedPercent"]), bucket.get("resetsAt"))
+        minutes = bucket.get("windowDurationMins")
+        if minutes:
+            if minutes == 10080:
+                label = "неделя"
+            elif minutes % 1440 == 0:
+                label = f"{minutes // 1440} дн."
+            elif minutes % 60 == 0:
+                hours = minutes // 60
+                label = "5 часов" if hours == 5 else f"{hours} ч."
+            else:
+                label = f"{minutes} мин."
+            quota[f"bar{index}_label"] = label
+    return quota if any(quota[f"bar{i}_percent"] >= 0 for i in (1, 2)) else None
+
+
+def fetch_codex_quota():
+    """Read-only official app-server API; no model turn and no auth file parsing."""
+    proc = subprocess.Popen(["codex", "app-server"], stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    selector = selectors.DefaultSelector()
+    selector.register(proc.stdout, selectors.EVENT_READ)
+    pending = bytearray()
+    deadline = time.monotonic() + 20
+
+    def send(message):
+        proc.stdin.write((json.dumps(message) + "\n").encode())
+        proc.stdin.flush()
+
+    def receive(request_id):
+        while True:
+            while b"\n" in pending:
+                line, _, rest = pending.partition(b"\n")
+                pending[:] = rest
+                message = json.loads(line)
+                if message.get("id") == request_id:
+                    if "error" in message:
+                        raise RuntimeError(message["error"].get("message", "Codex API error"))
+                    return message["result"]
+            timeout = deadline - time.monotonic()
+            if timeout <= 0 or not selector.select(timeout):
+                raise TimeoutError("Codex quota request timed out")
+            chunk = os.read(proc.stdout.fileno(), 65536)
+            if not chunk:
+                raise RuntimeError("Codex app-server closed")
+            pending.extend(chunk)
+
+    try:
+        send({"id": 1, "method": "initialize", "params": {
+            "clientInfo": {"name": "plasma_agent_status", "version": "1.2.0"}}})
+        receive(1)
+        send({"method": "initialized", "params": {}})
+        send({"id": 2, "method": "account/rateLimits/read", "params": {}})
+        return parse_codex_quota(receive(2))
+    finally:
+        selector.close()
+        proc.terminate()
+        try:
+            proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+        proc.stdin.close()
+        proc.stdout.close()
+
+
+def codex_home():
+    return os.path.abspath(os.path.expanduser(os.environ.get("CODEX_HOME", "~/.codex")))
+
+
+def tail_events(path, size=131072):
+    """Bound reads even for very long sessions; tolerate partially written JSONL."""
+    try:
+        with open(path, "rb") as stream:
+            stream.seek(0, os.SEEK_END)
+            offset = max(0, stream.tell() - size)
+            stream.seek(offset)
+            if offset:
+                stream.readline()
+            lines = stream.read().splitlines()
+        for line in lines:
+            try:
+                yield json.loads(line)
+            except (ValueError, UnicodeDecodeError):
+                continue
+    except OSError:
+        return
+
+
+def codex_session_status(events, now):
+    status = "отдыхает"
+    finished = False
+    pending_tools = set()
+    latest_ts = 0
+    for event in events:
+        payload = event.get("payload", {})
+        try:
+            latest_ts = datetime.fromisoformat(event["timestamp"].replace("Z", "+00:00")).timestamp()
+        except (KeyError, ValueError):
+            continue
+        kind = payload.get("type")
+        if event.get("type") == "event_msg":
+            if kind in ("task_complete", "task_completed", "turn_aborted", "turn_complete"):
+                status = "отдыхает"
+                finished = True
+                pending_tools.clear()
+            elif kind in ("task_started", "turn_started"):
+                status = "думает"
+                finished = False
+                pending_tools.clear()
+            elif kind == "error":
+                status = "ошибка"
+            elif kind in ("agent_reasoning", "agent_message", "token_count") and not finished:
+                status = "думает"
+            elif kind == "item_completed" and not finished:
+                item_type = payload.get("item", {}).get("type", "")
+                if item_type in ("commandExecution", "command_execution", "mcpToolCall", "mcp_tool_call", "fileChange", "file_change", "webSearch", "web_search"):
+                    status = "работает"
+        elif event.get("type") == "response_item":
+            if kind in ("function_call", "custom_tool_call"):
+                pending_tools.add(payload.get("call_id"))
+                status = "работает"
+            elif kind in ("function_call_output", "custom_tool_call_output"):
+                pending_tools.discard(payload.get("call_id"))
+                status = "работает" if pending_tools else "думает"
+            elif kind == "reasoning":
+                status = "думает"
+            elif kind == "message" and payload.get("role") == "assistant":
+                finished = payload.get("phase") == "final_answer"
+                status = "отдыхает" if finished else "думает"
+                if finished:
+                    pending_tools.clear()
+    # Unfinished rollouts can survive a crash. Do not show them as busy forever.
+    if now - latest_ts > 180:
+        return "отдыхает"
+    return "работает" if pending_tools else status
+
+
+def check_codex_status():
     now = time.time()
-
-    if is_active and (not cached or (now - cached.get("timestamp", 0)) > CACHE_TTL):
+    best = "спит"
+    # The quota worker's own short-lived app-server must not count as activity.
+    running = False
+    for path in glob.glob("/proc/[0-9]*/cmdline"):
         try:
-            subprocess.Popen(
-                [sys.executable, os.path.abspath(__file__), "--refresh-only"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True,
-            )
-        except Exception:
-            pass
+            with open(path, "rb") as stream:
+                args = stream.read().split(b"\0")
+            if args and os.path.basename(os.fsdecode(args[0])) == "codex" and b"app-server" not in args and b"login" not in args:
+                running = True
+                break
+        except OSError:
+            continue
+    files = glob.glob(os.path.join(codex_home(), "sessions", "*", "*", "*", "*.jsonl"))
+    recent = []
+    for path in files:
+        try:
+            modified = os.path.getmtime(path)
+            if 0 <= now - modified <= 180:
+                recent.append((modified, path))
+        except OSError:
+            continue
+    for _, path in sorted(recent, reverse=True)[:12]:
+        status = codex_session_status(tail_events(path), now)
+        if STATUS_PRIORITY[status] > STATUS_PRIORITY[best]:
+            best = status
+    return "отдыхает" if running and best == "спит" else best
 
-    if cached:
-        return cached
 
-    return {
-        "bar1_label": "5 часов",
-        "bar1_percent": 100,
-        "bar1_exact": 100.0,
-        "bar1_reset": "",
-        "bar2_label": "неделя",
-        "bar2_percent": 100,
-        "bar2_exact": 100.0,
-        "bar2_reset": "",
-    }
+def storage_paths(provider, durable=True):
+    variable, fallback = ("XDG_STATE_HOME", "~/.local/state") if durable else ("XDG_CACHE_HOME", "~/.cache")
+    directory = os.environ.get(variable) or os.path.expanduser(fallback)
+    root = os.path.join(directory, "plasma-agent-status")
+    os.makedirs(root, mode=0o700, exist_ok=True)
+    identity = codex_home() if provider == "codex" else os.path.expanduser("~/.gemini/antigravity-cli")
+    key = hashlib.sha256(identity.encode()).hexdigest()[:12]
+    base = os.path.join(root, f"{provider}-{key}")
+    return base + ".json", base + ".lock"
+
+
+def cache_paths(provider):
+    # Keep the helper name for compatibility; snapshots are now durable state.
+    return storage_paths(provider)
+
+
+def load_quota(provider):
+    state_file, _ = cache_paths(provider)
+    saved = read_cache(state_file)
+    if saved:
+        return saved
+    # Read-only migration: do not race another widget's in-flight state write.
+    legacy_file, _ = storage_paths(provider, durable=False)
+    return read_cache(legacy_file) or {}
+
+
+def read_cache(path):
+    try:
+        with open(path) as stream:
+            data = json.load(stream)
+        return data if isinstance(data, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def write_cache(path, data):
+    fd, temporary = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".quota-")
+    try:
+        with os.fdopen(fd, "w") as stream:
+            json.dump(data, stream, ensure_ascii=False)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+        directory_fd = os.open(os.path.dirname(path), os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def refresh_quota(provider):
+    cache_file, lock_file = cache_paths(provider)
+    with open(lock_file, "a") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return
+        cached = load_quota(provider)
+        now = time.time()
+        if 0 <= now - cached.get("attempted_at", 0) < CACHE_TTL:
+            # Commit migrated snapshots while holding the provider lock.
+            if not os.path.exists(cache_file):
+                write_cache(cache_file, cached)
+            return
+        # Persist the attempt before networking to avoid retry storms after failures.
+        cached["attempted_at"] = now
+        write_cache(cache_file, cached)
+        try:
+            quota = fetch_codex_quota() if provider == "codex" else fetch_agy_quota()
+            if not quota:
+                raise RuntimeError("Лимиты недоступны: проверьте вход в CLI и тип подписки")
+            updated_at = time.time()
+            merged = dict(cached)
+            # A partial response must not erase the other window's last known quota.
+            for index in (1, 2):
+                if quota.get(f"bar{index}_percent", -1) < 0:
+                    continue
+                prefix = f"bar{index}_"
+                for key in list(merged):
+                    if key.startswith(prefix):
+                        del merged[key]
+                merged.update({key: value for key, value in quota.items() if key.startswith(prefix)})
+                merged[f"bar{index}_updated_at"] = updated_at
+            merged.update(timestamp=updated_at, attempted_at=now, quota_error="")
+            write_cache(cache_file, merged)
+        except Exception as error:
+            cached["quota_error"] = str(error)
+            write_cache(cache_file, cached)
+
+
+def get_usage(provider):
+    cache_file, _ = cache_paths(provider)
+    cached = load_quota(provider)
+    now = time.time()
+    # Fetch even while the agent sleeps: installing the widget should show quotas.
+    if not os.path.exists(cache_file) or not 0 <= now - cached.get("attempted_at", 0) < CACHE_TTL:
+        subprocess.Popen([sys.executable, os.path.abspath(__file__), "--provider", provider, "--refresh-only"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    quota = unknown_quota()
+    quota.update(cached)
+    quota["quota_stale"] = any(
+        quota.get(f"bar{index}_percent", -1) >= 0
+        and now - quota.get(f"bar{index}_updated_at", quota.get("timestamp", 0)) > CACHE_TTL * 3
+        for index in (1, 2))
+    for index in (1, 2):
+        reset_at = quota.get(f"bar{index}_resets_at")
+        quota[f"bar{index}_reset"] = format_reset_time(datetime.fromtimestamp(reset_at, timezone.utc).isoformat()) if reset_at else ""
+    return quota
 
 
 def main():
-    if len(sys.argv) > 1 and sys.argv[1] == "--refresh-only":
-        fetch_live_quota()
+    parser = argparse.ArgumentParser(description="Plasma AI Status: Antigravity / Codex status provider")
+    parser.add_argument("custom_script", nargs="?", default="")
+    parser.add_argument("--provider", choices=("antigravity", "codex"), default="antigravity")
+    parser.add_argument("--refresh-only", action="store_true")
+    args = parser.parse_args()
+    if args.refresh_only:
+        refresh_quota(args.provider)
         return
-
-    custom_path = sys.argv[1] if len(sys.argv) > 1 else ""
-    if custom_path and not custom_path.startswith("-"):
-        custom_data = check_custom_script(custom_path)
-        if custom_data:
-            print(json.dumps(custom_data, ensure_ascii=False))
-            return
-
-    active_pids = get_active_agy_pids()
-    current_status = check_agy_status(active_pids)
-    usage = get_agy_usage(is_active=bool(active_pids))
-
-    result = {
-        "status": current_status,
-        "bar1_label": usage.get("bar1_label", "5 часов"),
-        "bar1_percent": usage.get("bar1_percent", 100),
-        "bar1_exact": usage.get("bar1_exact", usage.get("bar1_percent", 100)),
-        "bar1_reset": usage.get("bar1_reset", ""),
-        "bar2_label": usage.get("bar2_label", "неделя"),
-        "bar2_percent": usage.get("bar2_percent", 100),
-        "bar2_exact": usage.get("bar2_exact", usage.get("bar2_percent", 100)),
-        "bar2_reset": usage.get("bar2_reset", ""),
-    }
+    custom = check_custom_script(args.custom_script)
+    if custom:
+        print(json.dumps(custom, ensure_ascii=False))
+        return
+    if args.provider == "codex":
+        status = check_codex_status()
+    else:
+        status = check_agy_status(get_active_agy_pids())
+    result = get_usage(args.provider)
+    result.update(status=status, provider=args.provider)
     print(json.dumps(result, ensure_ascii=False))
 
 
